@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Snah-s/commit_tool/internal/commit"
+	"github.com/Snah-s/cmt/internal/commit"
 )
 
 func TestArguments(t *testing.T) {

@@ -1,4 +1,4 @@
-# commit_tool
+# cmt
 
 Migration of `gitmoji-cli` to a native Go CLI with `emoji`, `standard`, and
 `hybrid` commit modes.

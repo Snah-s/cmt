@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
-	"github.com/Snah-s/commit_tool/internal/config"
+	"github.com/Snah-s/cmt/internal/config"
 )
 
 func preferenceForm(ctx context.Context, input io.Reader, output io.Writer, accessible bool, fields ...huh.Field) error {

@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/Snah-s/commit_tool/internal/catalog"
+	"github.com/Snah-s/cmt/internal/catalog"
 )
 
 func BenchmarkInlineSelectorStart(b *testing.B) {

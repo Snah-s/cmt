@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/Snah-s/commit_tool/internal/catalog"
+	"github.com/Snah-s/cmt/internal/catalog"
 )
 
 var Types = []string{"feat", "fix", "docs", "refactor", "test", "chore"}

@@ -17,9 +17,9 @@ import (
 	"charm.land/huh/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/Snah-s/commit_tool/internal/catalog"
-	"github.com/Snah-s/commit_tool/internal/commit"
-	"github.com/Snah-s/commit_tool/internal/config"
+	"github.com/Snah-s/cmt/internal/catalog"
+	"github.com/Snah-s/cmt/internal/commit"
+	"github.com/Snah-s/cmt/internal/config"
 )
 
 func testCatalog(t *testing.T) catalog.Catalog {

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Snah-s/commit_tool/internal/catalog"
+	"github.com/Snah-s/cmt/internal/catalog"
 )
 
 // A PTY transcript cannot detect artifacts left on screen by incremental redraws.

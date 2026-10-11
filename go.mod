@@ -1,4 +1,4 @@
-module github.com/Snah-s/commit_tool
+module github.com/Snah-s/cmt
 
 go 1.27.1
 

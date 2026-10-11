@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Snah-s/commit_tool/internal/storage"
+	"github.com/Snah-s/cmt/internal/storage"
 )
 
 func readHook(path string) ([]byte, error) {

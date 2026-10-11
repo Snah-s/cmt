@@ -10,12 +10,12 @@ import (
 
 	"github.com/charmbracelet/x/term"
 
-	"github.com/Snah-s/commit_tool/internal/catalog"
-	"github.com/Snah-s/commit_tool/internal/cli"
-	"github.com/Snah-s/commit_tool/internal/commit"
-	"github.com/Snah-s/commit_tool/internal/config"
-	gitclient "github.com/Snah-s/commit_tool/internal/git"
-	"github.com/Snah-s/commit_tool/internal/ui"
+	"github.com/Snah-s/cmt/internal/catalog"
+	"github.com/Snah-s/cmt/internal/cli"
+	"github.com/Snah-s/cmt/internal/commit"
+	"github.com/Snah-s/cmt/internal/config"
+	gitclient "github.com/Snah-s/cmt/internal/git"
+	"github.com/Snah-s/cmt/internal/ui"
 )
 
 func run(ctx context.Context, args []string) int {

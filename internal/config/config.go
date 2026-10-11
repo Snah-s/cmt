@@ -14,8 +14,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Snah-s/commit_tool/internal/commit"
-	"github.com/Snah-s/commit_tool/internal/storage"
+	"github.com/Snah-s/cmt/internal/commit"
+	"github.com/Snah-s/cmt/internal/storage"
 )
 
 type Preferences struct {

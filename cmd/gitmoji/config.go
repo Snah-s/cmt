@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Snah-s/commit_tool/internal/cli"
-	"github.com/Snah-s/commit_tool/internal/config"
-	"github.com/Snah-s/commit_tool/internal/ui"
+	"github.com/Snah-s/cmt/internal/cli"
+	"github.com/Snah-s/cmt/internal/config"
+	"github.com/Snah-s/cmt/internal/ui"
 	"github.com/charmbracelet/x/term"
 )
 

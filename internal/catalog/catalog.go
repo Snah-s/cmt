@@ -17,7 +17,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/Snah-s/commit_tool/internal/storage"
+	"github.com/Snah-s/cmt/internal/storage"
 )
 
 //go:embed assets/gitmojis.json assets/commit-emojis.json

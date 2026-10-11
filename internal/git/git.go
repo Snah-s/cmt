@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Snah-s/commit_tool/internal/storage"
+	"github.com/Snah-s/cmt/internal/storage"
 )
 
 type Repo struct{ Dir string }

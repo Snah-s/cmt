@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/Snah-s/commit_tool/internal/commit"
+	"github.com/Snah-s/cmt/internal/commit"
 )
 
 type Options struct {

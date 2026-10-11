@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Snah-s/commit_tool/internal/config"
+	"github.com/Snah-s/cmt/internal/config"
 )
 
 func TestConfigurationAndOfflineCatalog(t *testing.T) {
