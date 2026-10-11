@@ -22,24 +22,24 @@ if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
   source_state=dirty
   release_revision="$release_revision-dirty"
 fi
-name="gitmoji_${release_version}_${target_os}_${target_arch}"
+name="cmt_${release_version}_${target_os}_${target_arch}"
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT HUP INT TERM
 stage="$work/$name"
 mkdir -p "$stage/licenses"
-binary=gitmoji
-if [ "$target_os" = windows ]; then binary=gitmoji.exe; fi
+binary=cmt
+if [ "$target_os" = windows ]; then binary=cmt.exe; fi
 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
   -ldflags="-s -w -X main.version=$release_version -X main.revision=$release_revision -X main.buildDate=$release_date" \
-  -o "$stage/$binary" ./cmd/gitmoji
+  -o "$stage/$binary" ./cmd/cmt
 cp LICENSE README.md "$stage/"
 cp go.mod "$stage/"
-cp internal/catalog/assets/LICENSE "$stage/licenses/gitmoji-catalog-LICENSE"
+cp internal/catalog/assets/LICENSE "$stage/licenses/emoji-catalog-LICENSE"
 cp licenses/Go-LICENSE "$stage/licenses/Go-LICENSE"
 # Include notices from modules actually linked for the requested target.
-go list -deps -f '{{if and .Module (not .Module.Main)}}{{.Module.Path}}{{"\t"}}{{.Module.Version}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/gitmoji > "$work/modules"
+go list -deps -f '{{if and .Module (not .Module.Main)}}{{.Module.Path}}{{"\t"}}{{.Module.Version}}{{"\t"}}{{.Module.Dir}}{{end}}' ./cmd/cmt > "$work/modules"
 sort -u "$work/modules" > "$work/sorted"
 printf 'Linked Go modules and versions (plus the Go standard library):\n' > "$stage/licenses/MODULES.txt"
 tab=$(printf '\t')

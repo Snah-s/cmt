@@ -26,7 +26,7 @@ func gitCommand(t *testing.T, dir string, env []string, args ...string) string {
 func phase4Repo(t *testing.T) (string, []string) {
 	t.Helper()
 	dir := t.TempDir()
-	env := append(testEnvironment(t), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_EDITOR=:", "GITMOJI_TEST_NATIVE=1")
+	env := append(testEnvironment(t), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_EDITOR=:", "CMT_TEST_NATIVE=1")
 	gitCommand(t, dir, env, "init", "--quiet", "--initial-branch=main")
 	gitCommand(t, dir, env, "config", "user.name", "Phase 4 Test")
 	gitCommand(t, dir, env, "config", "user.email", "phase4@example.invalid")
@@ -58,6 +58,12 @@ func nativeCommand(t *testing.T, dir string, env []string, code int, args ...str
 
 func TestNativeGitClientAndHookLifecycle(t *testing.T) {
 	dir, env := phase4Repo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"autoAdd":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "untracked"), []byte("do not stage"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(dir, "file")
 	if err := os.WriteFile(path, []byte("staged\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -70,6 +76,9 @@ func TestNativeGitClientAndHookLifecycle(t *testing.T) {
 	nativeCommand(t, dir, env, 0, "commit", "--type=fix", "--title=preserve staged data", "--message="+body)
 	if gitCommand(t, dir, env, "show", "HEAD:file") != "staged\n" || gitCommand(t, dir, env, "diff", "--", "file") == "" {
 		t.Fatal("client committed unstaged data")
+	}
+	if !strings.Contains(gitCommand(t, dir, env, "ls-files", "--others", "--exclude-standard"), "untracked\n") {
+		t.Fatal("client staged an untracked file")
 	}
 	_, message, _ := strings.Cut(gitCommand(t, dir, env, "cat-file", "commit", "HEAD"), "\n\n")
 	if message != "fix: preserve staged data\n\n"+body {
@@ -87,9 +96,6 @@ func TestNativeGitClientAndHookLifecycle(t *testing.T) {
 		}
 		return
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".gitmojirc.json"), []byte(`{"autoAdd":true}`), 0600); err != nil {
-		t.Fatal(err)
-	}
 	nativeCommand(t, dir, env, 0, "init")
 	nativeCommand(t, dir, env, 0, "init")
 	nativeCommand(t, dir, env, 1, "commit", "--type=fix", "--title=blocked before staging")
@@ -99,7 +105,7 @@ func TestNativeGitClientAndHookLifecycle(t *testing.T) {
 	nativeCommand(t, dir, env, 0, "remove")
 	nativeCommand(t, dir, env, 0, "remove")
 	hook := filepath.Join(dir, ".git", "hooks", "prepare-commit-msg")
-	foreign := []byte("#!/bin/sh\n# gitmoji-native managed hook v1\necho foreign\n")
+	foreign := []byte("#!/bin/sh\n# cmt-native managed hook v1\necho foreign\n")
 	if err := os.WriteFile(hook, foreign, 0755); err != nil {
 		t.Fatal(err)
 	}

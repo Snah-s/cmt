@@ -19,13 +19,12 @@ import (
 )
 
 type Preferences struct {
-	AutoAdd         bool
 	ScopePrompt     bool
 	Scopes          []string
 	MessagePrompt   bool
 	EmojiFormat     string
 	CapitalizeTitle bool
-	GitmojisURL     string
+	CatalogURL      string
 	CommitFormat    string
 	Unknown         map[string]json.RawMessage
 }
@@ -38,7 +37,7 @@ type Resolved struct {
 
 func Defaults() Preferences {
 	return Preferences{MessagePrompt: true, EmojiFormat: "emoji", CapitalizeTitle: true,
-		GitmojisURL: "https://gitmoji.dev/api/gitmojis", CommitFormat: "standard"}
+		CatalogURL: "https://gitmoji.dev/api/gitmojis", CommitFormat: "standard"}
 }
 
 func Parse(data []byte, legacy bool) (Preferences, error) {
@@ -49,21 +48,27 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 	}
 	if legacy {
 		p.CommitFormat = "emoji"
+		if value, ok := fields["gitmojisUrl"]; ok {
+			if _, exists := fields["catalogUrl"]; !exists {
+				fields["catalogUrl"] = value
+			}
+			delete(fields, "gitmojisUrl")
+		}
 	}
 	p.Unknown = make(map[string]json.RawMessage)
 	for key, value := range fields {
 		var target any
 		switch key {
 		case "autoAdd":
-			target = &p.AutoAdd
+			target = new(bool) // Accept old profiles without enabling staging.
 		case "messagePrompt":
 			target = &p.MessagePrompt
 		case "capitalizeTitle":
 			target = &p.CapitalizeTitle
 		case "emojiFormat":
 			target = &p.EmojiFormat
-		case "gitmojisUrl":
-			target = &p.GitmojisURL
+		case "catalogUrl":
+			target = &p.CatalogURL
 		case "commitFormat":
 			target = &p.CommitFormat
 		case "scopePrompt":
@@ -103,9 +108,9 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 	if !slices.Contains([]string{"emoji", "code"}, p.EmojiFormat) {
 		return p, errors.New("emojiFormat: choose emoji or code")
 	}
-	u, err := url.Parse(p.GitmojisURL)
+	u, err := url.Parse(p.CatalogURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.Opaque != "" {
-		return p, errors.New("gitmojisUrl: expected an absolute HTTP(S) URL")
+		return p, errors.New("catalogUrl: expected an absolute HTTP(S) URL")
 	}
 	return p, nil
 }
@@ -125,13 +130,13 @@ func object(data []byte) (map[string]json.RawMessage, error) {
 }
 
 func (p Preferences) JSON() ([]byte, error) {
-	fields := make(map[string]any, len(p.Unknown)+7)
+	fields := make(map[string]any, len(p.Unknown)+6)
 	for key, value := range p.Unknown {
 		fields[key] = value
 	}
-	fields["autoAdd"], fields["messagePrompt"] = p.AutoAdd, p.MessagePrompt
+	fields["messagePrompt"] = p.MessagePrompt
 	fields["emojiFormat"], fields["capitalizeTitle"] = p.EmojiFormat, p.CapitalizeTitle
-	fields["gitmojisUrl"], fields["commitFormat"] = p.GitmojisURL, p.CommitFormat
+	fields["catalogUrl"], fields["commitFormat"] = p.CatalogURL, p.CommitFormat
 	fields["scopePrompt"] = p.ScopePrompt
 	if p.Scopes != nil {
 		fields["scopePrompt"] = p.Scopes
@@ -173,7 +178,7 @@ func Resolve(cwd string) (Resolved, error) {
 			if err != nil {
 				return Resolved{}, fmt.Errorf("%s: %w", manifest, err)
 			}
-			if value, ok := fields["gitmoji"]; ok {
+			if value, ok := fields["cmt"]; ok {
 				p, err := Parse(value, false)
 				if err != nil {
 					return Resolved{}, fmt.Errorf("%s: %w", manifest, err)
@@ -183,7 +188,7 @@ func Resolve(cwd string) (Resolved, error) {
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return Resolved{}, err
 		}
-		rc := filepath.Join(dir, ".gitmojirc.json")
+		rc := filepath.Join(dir, ".cmtrc.json")
 		p, err := Read(rc, false)
 		if err == nil {
 			return Resolved{p, rc, true}, nil
@@ -216,7 +221,7 @@ func NativePath() (string, error) {
 	if !filepath.IsAbs(dir) {
 		return "", errors.New("user configuration directory must be absolute")
 	}
-	return filepath.Join(dir, "gitmoji", "config.json"), nil
+	return filepath.Join(dir, "cmt", "config.json"), nil
 }
 
 func LegacyPath() (string, error) {
@@ -271,7 +276,7 @@ func (p Preferences) Set(assignments []string) (Preferences, error) {
 			return p, fmt.Errorf("--set: expected KEY=JSON, got %q", assignment)
 		}
 		switch key {
-		case "autoAdd", "scopePrompt", "messagePrompt", "emojiFormat", "capitalizeTitle", "gitmojisUrl", "commitFormat":
+		case "scopePrompt", "messagePrompt", "emojiFormat", "capitalizeTitle", "catalogUrl", "commitFormat":
 			fields[key] = json.RawMessage(value)
 		default:
 			return p, fmt.Errorf("--set: unknown preference %q", key)

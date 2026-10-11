@@ -40,7 +40,7 @@ func Parse(args []string) (Options, error) {
 			return o, errors.New("argument contains invalid UTF-8")
 		}
 	}
-	f := flag.NewFlagSet("gitmoji", flag.ContinueOnError)
+	f := flag.NewFlagSet("cmt", flag.ContinueOnError)
 	f.SetOutput(io.Discard)
 	f.BoolVar(&o.Help, "help", false, "")
 	f.BoolVar(&o.Help, "h", false, "")
@@ -213,7 +213,7 @@ func (o Options) Defaults(initial commit.Draft) commit.Draft {
 	return initial.Active()
 }
 
-const Help = `Usage: gitmoji <command> [flags]
+const Help = `Usage: cmt <command> [flags]
 
   commit (-c, --commit)        Create a Git commit using the current index
   prototype                   Prepare a message without changing Git or files
@@ -241,6 +241,6 @@ const Help = `Usage: gitmoji <command> [flags]
 No TTY: commit requires --title and a complete selection; prototype returns the message.
 Flags can be interleaved; -- ends flags and allows literal queries.
 Values starting with a dash: --title=-value. Repeated flags: last value wins.
-Commit honors autoAdd (false by default); an active managed hook blocks this client.
+Commit uses only staged changes; an active managed hook blocks this client.
 Hooks preserve messages on cancel, without TTY, during rebase, and for commit/merge sources.
 `

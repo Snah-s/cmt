@@ -34,7 +34,7 @@ func catalogJSON(t *testing.T, entries []Emoji) []byte {
 
 func writeCache(t *testing.T, data []byte) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "gitmojis.json")
+	path := filepath.Join(t.TempDir(), "emojis.json")
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestCachePath(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	path, err := CachePath()
-	if err != nil || path != filepath.Join(home, ".gitmoji", "gitmojis.json") {
+	if err != nil || path != filepath.Join(home, ".cmt", "emojis.json") {
 		t.Fatalf("cache path=%q, error=%v", path, err)
 	}
 	t.Setenv("HOME", "relative-home")
@@ -192,7 +192,7 @@ func TestUpdateRepairsUnchangedCache(t *testing.T) {
 	}))
 	defer server.Close()
 	for _, corrupt := range []bool{false, true} {
-		cache := filepath.Join(t.TempDir(), "gitmojis.json")
+		cache := filepath.Join(t.TempDir(), "emojis.json")
 		if corrupt {
 			cache = writeCache(t, []byte("invalid cache"))
 		}

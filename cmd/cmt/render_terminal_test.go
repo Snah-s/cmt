@@ -30,7 +30,7 @@ func TestEmojiSelectorScreen(t *testing.T) {
 			}
 			dir := t.TempDir()
 			socket := filepath.Join(dir, "tmux.sock")
-			env := append(testEnvironment(t), "GITMOJI_TEST_PROCESS=1", "TERM=xterm-256color", "ACCESSIBLE=")
+			env := append(testEnvironment(t), "CMT_TEST_PROCESS=1", "TERM=xterm-256color", "ACCESSIBLE=")
 			run := func(args ...string) string {
 				t.Helper()
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -104,7 +104,7 @@ func TestEmojiSelectorScreen(t *testing.T) {
 					}
 					label := strings.TrimSpace(strings.TrimPrefix(line, "┃ "))
 					label = strings.TrimSpace(strings.TrimPrefix(label, "> "))
-					if label != "" && label != "Choose a gitmoji" && !labels[normalize(label)] {
+					if label != "" && label != "Choose an emoji" && !labels[normalize(label)] {
 						t.Fatalf("corrupted option while selecting %s: %s", entry.Code, screen)
 					}
 				}

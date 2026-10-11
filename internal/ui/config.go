@@ -77,7 +77,6 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 			return err
 		}),
 		huh.NewConfirm().Title("Capitalize descriptions in emoji mode?").Value(&p.CapitalizeTitle),
-		huh.NewConfirm().Title("Automatically stage changes when creating a commit?").Value(&p.AutoAdd),
 		huh.NewInput().Title("Scope prompt (JSON boolean or array of scopes)").Value(&scopeText).Validate(func(value string) error {
 			if value == "" {
 				value = scopeText
@@ -86,8 +85,8 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 			return err
 		}),
 		huh.NewConfirm().Title("Prompt for a message body?").Value(&p.MessagePrompt),
-		huh.NewInput().Title("Catalog URL").Value(&p.GitmojisURL).Validate(func(value string) error {
-			_, err := p.Set([]string{"gitmojisUrl=" + quoteDefault(value, p.GitmojisURL)})
+		huh.NewInput().Title("Catalog URL").Value(&p.CatalogURL).Validate(func(value string) error {
+			_, err := p.Set([]string{"catalogUrl=" + quoteDefault(value, p.CatalogURL)})
 			return err
 		}),
 		huh.NewConfirm().Title("Save global preferences?").Description("Project preferences may override these values.").Value(&confirmed),

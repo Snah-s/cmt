@@ -41,7 +41,7 @@ func TestReplacementAndFailedWrite(t *testing.T) {
 	if string(data) != "safe" {
 		t.Fatal("failed replacement changed destination")
 	}
-	matches, _ := filepath.Glob(filepath.Join(root, ".gitmoji-*"))
+	matches, _ := filepath.Glob(filepath.Join(root, ".cmt-*"))
 	if len(matches) != 0 {
 		t.Fatalf("leaked temporary files: %v", matches)
 	}

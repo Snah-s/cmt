@@ -11,14 +11,17 @@ import (
 )
 
 func TestPreferencesAndImport(t *testing.T) {
-	for _, data := range []string{`null`, `[]`, `{`, `{"autoAdd":null}`, `{"scopePrompt":null}`, `{"scopePrompt":[null]}`, `{"scopePrompt":["API"]}`, `{"scopePrompt":["two words"]}`, `{"scopePrompt":"api"}`, `{"messagePrompt":0}`, `{"capitalizeTitle":"true"}`, `{"emojiFormat":"unicode"}`, `{"gitmojisUrl":"file:///tmp/catalog"}`, `{"commitFormat":"unknown"}`, "{\"other\":\"\xff\"}"} {
+	for _, data := range []string{`null`, `[]`, `{`, `{"autoAdd":null}`, `{"scopePrompt":null}`, `{"scopePrompt":[null]}`, `{"scopePrompt":["API"]}`, `{"scopePrompt":["two words"]}`, `{"scopePrompt":"api"}`, `{"messagePrompt":0}`, `{"capitalizeTitle":"true"}`, `{"emojiFormat":"unicode"}`, `{"catalogUrl":"file:///tmp/catalog"}`, `{"commitFormat":"unknown"}`, "{\"other\":\"\xff\"}"} {
 		if _, err := Parse([]byte(data), false); err == nil {
 			t.Fatalf("accepted %q", data)
 		}
 	}
-	p, err := Parse([]byte(`{"scopePrompt":["api","cli"],"messagePrompt":false,"capitalizeTitle":false,"emojiFormat":"code","extra":{"keep":true}}`), true)
+	p, err := Parse([]byte(`{"autoAdd":true,"scopePrompt":["api","cli"],"messagePrompt":false,"capitalizeTitle":false,"emojiFormat":"code","extra":{"keep":true},"gitmojisUrl":"https://example.invalid/emojis"}`), true)
 	if err != nil || p.CommitFormat != "emoji" || !p.ScopePrompt || len(p.Scopes) != 2 || p.MessagePrompt || p.CapitalizeTitle {
 		t.Fatalf("legacy: %+v %v", p, err)
+	}
+	if p.CatalogURL != "https://example.invalid/emojis" || p.Unknown["gitmojisUrl"] != nil {
+		t.Fatalf("legacy catalog URL not migrated: %+v", p)
 	}
 	root := t.TempDir()
 	source := filepath.Join(root, "legacy.json")
@@ -33,6 +36,9 @@ func TestPreferencesAndImport(t *testing.T) {
 		t.Fatal(err)
 	}
 	delete(fields, "commitFormat")
+	fields["autoAdd"] = json.RawMessage(`true`)
+	fields["gitmojisUrl"] = fields["catalogUrl"]
+	delete(fields, "catalogUrl")
 	original, err = json.Marshal(fields)
 	if err != nil {
 		t.Fatal(err)
@@ -44,12 +50,15 @@ func TestPreferencesAndImport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if imported.CommitFormat != "emoji" || string(imported.Unknown["extra"]) != "{\"keep\":true}" {
+	if imported.CommitFormat != "emoji" || imported.CatalogURL != p.CatalogURL || string(imported.Unknown["extra"]) != "{\"keep\":true}" {
 		t.Fatalf("import: %+v", imported)
 	}
 	before, err := os.ReadFile(dest)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if bytes.Contains(before, []byte("gitmojisUrl")) || bytes.Contains(before, []byte("autoAdd")) || !bytes.Contains(before, []byte("catalogUrl")) {
+		t.Fatalf("import saved a retired key: %s", before)
 	}
 	if _, err := Import(source, dest); err == nil {
 		t.Fatal("import overwrote existing profile")
@@ -59,17 +68,40 @@ func TestPreferencesAndImport(t *testing.T) {
 	if !bytes.Equal(before, after) || !bytes.Equal(legacy, original) {
 		t.Fatal("import changed a protected file")
 	}
-	p, err = imported.Set([]string{`commitFormat="hybrid"`, `scopePrompt=false`, `autoAdd=true`})
-	if err != nil || p.CommitFormat != "hybrid" || p.ScopePrompt || p.Scopes != nil || !p.AutoAdd || len(p.Unknown) != 1 {
+	p, err = imported.Set([]string{`commitFormat="hybrid"`, `scopePrompt=false`})
+	if err != nil || p.CommitFormat != "hybrid" || p.ScopePrompt || p.Scopes != nil || len(p.Unknown) != 1 {
 		t.Fatalf("set: %+v %v", p, err)
 	}
 	if err := Save(dest, p); err != nil {
 		t.Fatal(err)
 	}
-	for _, assign := range []string{`invalid`, `commitFormat=hybrid`, `autoAdd=null`, `unknown=true`} {
+	for _, assign := range []string{`invalid`, `commitFormat=hybrid`, `autoAdd=null`, `autoAdd=true`, `autoAdd=false`, `unknown=true`} {
 		if _, err := p.Set([]string{assign}); err == nil {
 			t.Fatalf("accepted %q", assign)
 		}
+	}
+}
+
+func TestRetiredAutoAdd(t *testing.T) {
+	for _, value := range []string{"true", "false"} {
+		p, err := Parse([]byte(`{"autoAdd":`+value+`}`), false)
+		if err != nil || p.Unknown["autoAdd"] != nil {
+			t.Fatalf("previous autoAdd profile: %+v %v", p, err)
+		}
+		data, err := p.JSON()
+		if err != nil || bytes.Contains(data, []byte("autoAdd")) {
+			t.Fatalf("serialized retired preference: %s %v", data, err)
+		}
+	}
+}
+
+func TestLegacyCatalogURL(t *testing.T) {
+	p, err := Parse([]byte(`{"gitmojisUrl":"https://old.invalid/emojis","catalogUrl":"https://new.invalid/emojis"}`), true)
+	if err != nil || p.CatalogURL != "https://new.invalid/emojis" {
+		t.Fatalf("current catalog key must take precedence: %+v %v", p, err)
+	}
+	if _, err := Parse([]byte(`{"gitmojisUrl":"file:///tmp/catalog"}`), true); err == nil {
+		t.Fatal("import accepted an invalid legacy catalog URL")
 	}
 }
 
@@ -87,10 +119,10 @@ func TestPathsAndDefaults(t *testing.T) {
 	if err != nil || !filepath.IsAbs(legacy) || !strings.Contains(legacy, "gitmoji-nodejs") {
 		t.Fatalf("legacy path: %q %v", legacy, err)
 	}
-	wantNative, wantLegacy := filepath.Join(root, "config", "gitmoji", "config.json"), filepath.Join(root, "config", "gitmoji-nodejs", "config.json")
+	wantNative, wantLegacy := filepath.Join(root, "config", "cmt", "config.json"), filepath.Join(root, "config", "gitmoji-nodejs", "config.json")
 	switch runtime.GOOS {
 	case "darwin":
-		wantNative = filepath.Join(root, "Library", "Application Support", "gitmoji", "config.json")
+		wantNative = filepath.Join(root, "Library", "Application Support", "cmt", "config.json")
 		wantLegacy = filepath.Join(root, "Library", "Preferences", "gitmoji-nodejs", "config.json")
 	case "windows":
 		wantLegacy = filepath.Join(root, "config", "gitmoji-nodejs", "Config", "config.json")
@@ -138,7 +170,7 @@ func TestProjectPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	global, err := Defaults().Set([]string{`autoAdd=true`, `emojiFormat="code"`})
+	global, err := Defaults().Set([]string{`messagePrompt=false`, `emojiFormat="code"`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,17 +189,17 @@ func TestProjectPrecedence(t *testing.T) {
 		}
 	}
 	r, err := Resolve(child)
-	if err != nil || r.Project || !r.Preferences.AutoAdd {
+	if err != nil || r.Project || r.Preferences.MessagePrompt {
 		t.Fatalf("global: %+v %v", r, err)
 	}
-	rc := filepath.Join(project, ".gitmojirc.json")
+	rc := filepath.Join(project, ".cmtrc.json")
 	manifest := filepath.Join(project, "package.json")
 	write(rc, `{}`)
 	r, err = Resolve(child)
-	if err != nil || !r.Project || r.Source != rc || r.Preferences.AutoAdd || r.Preferences.EmojiFormat != "emoji" {
+	if err != nil || !r.Project || r.Source != rc || !r.Preferences.MessagePrompt || r.Preferences.EmojiFormat != "emoji" {
 		t.Fatalf("empty project: %+v %v", r, err)
 	}
-	write(manifest, `{"gitmoji":{"commitFormat":"hybrid"}}`)
+	write(manifest, `{"cmt":{"commitFormat":"hybrid"}}`)
 	write(rc, `{"invalid`)
 	r, err = Resolve(child)
 	if err != nil || r.Source != manifest || r.Preferences.CommitFormat != "hybrid" {
@@ -179,13 +211,13 @@ func TestProjectPrecedence(t *testing.T) {
 	if err != nil || r.Source != rc {
 		t.Fatalf("manifest without key: %+v %v", r, err)
 	}
-	nearest := filepath.Join(child, ".gitmojirc.json")
+	nearest := filepath.Join(child, ".cmtrc.json")
 	write(nearest, `{"autoAdd":false}`)
 	r, err = Resolve(child)
 	if err != nil || r.Source != nearest {
 		t.Fatalf("nearest: %+v %v", r, err)
 	}
-	for _, text := range []string{`{`, `{"gitmoji":null}`, `{"gitmoji":{"scopePrompt":17}}`} {
+	for _, text := range []string{`{`, `{"cmt":null}`, `{"cmt":{"scopePrompt":17}}`} {
 		path := filepath.Join(child, "package.json")
 		write(path, text)
 		if _, err := Resolve(child); err == nil || !strings.Contains(err.Error(), path) {

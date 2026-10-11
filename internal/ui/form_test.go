@@ -60,7 +60,7 @@ func TestPreferencePromptsAndPreview(t *testing.T) {
 }
 
 func TestAccessibleConfiguration(t *testing.T) {
-	p, err := Configure(context.Background(), strings.NewReader("hybrid\ncode\nn\nn\n[\"api\",\"cli\"]\nn\n\ny\n"), io.Discard, config.Defaults(), true)
+	p, err := Configure(context.Background(), strings.NewReader("hybrid\ncode\nn\n[\"api\",\"cli\"]\nn\n\ny\n"), io.Discard, config.Defaults(), true)
 	if err != nil || p.CommitFormat != "hybrid" || p.EmojiFormat != "code" || p.CapitalizeTitle || p.MessagePrompt || !p.ScopePrompt || len(p.Scopes) != 2 {
 		t.Fatalf("configuration: %+v %v", p, err)
 	}
@@ -221,17 +221,17 @@ func TestInlineSelectorStagesReuseOneCompactList(t *testing.T) {
 	}
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if selector.step != "emoji" {
-		t.Fatalf("type selection did not advance to gitmoji: %q", selector.step)
+		t.Fatalf("type selection did not advance to emoji: %q", selector.step)
 	}
 	view := ansi.Strip(selector.View().Content)
-	if strings.Contains(view, "Choose an emoji") || !strings.Contains(view, "> ✨ :sparkles:") {
+	if strings.Count(view, "Choose an emoji") != 1 || !strings.Contains(view, "> ✨ :sparkles:") {
 		t.Fatalf("selector did not start with a real compatible emoji: %q", view)
 	}
 	if got := strings.Count(view, "> "); got != 1 {
-		t.Fatalf("gitmoji selector rendered %d cursors: %q", got, view)
+		t.Fatalf("emoji selector rendered %d cursors: %q", got, view)
 	}
 	if lines := strings.Split(view, "\n"); len(lines) > 8 {
-		t.Fatalf("gitmoji selector used too many rows: %d / %q", len(lines), view)
+		t.Fatalf("emoji selector used too many rows: %d / %q", len(lines), view)
 	}
 	for _, background := range []color.Color{color.Black, color.White, color.Black} {
 		selector.Update(tea.BackgroundColorMsg{Color: background})
@@ -241,7 +241,7 @@ func TestInlineSelectorStagesReuseOneCompactList(t *testing.T) {
 	}
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !selector.done || owner.draft.Emoji != ":sparkles:" || len(selector.answers) != 3 {
-		t.Fatalf("gitmoji selection did not finish: draft=%+v answers=%q", owner.draft, selector.answers)
+		t.Fatalf("emoji selection did not finish: draft=%+v answers=%q", owner.draft, selector.answers)
 	}
 }
 
@@ -266,7 +266,7 @@ func TestOptionalSingleLineBody(t *testing.T) {
 }
 
 func TestConfirmationDescription(t *testing.T) {
-	const description = "Stages changes under the current directory and creates a Git commit."
+	const description = "Creates a Git commit from the index."
 	m := newModel(testCatalog(t), Draft{Mode: "standard", Type: "docs", Description: "update guide"}, Options{Accessible: true, InlineSelectors: true, HideScope: true, HideBody: true, ConfirmDescription: description})
 	var output bytes.Buffer
 	if err := m.textFields(&lineReader{reader: strings.NewReader("\ny\n")}, &output); err != nil {
@@ -290,7 +290,7 @@ func TestEmptyHybridCategory(t *testing.T) {
 	owner := newModel(c, Draft{Mode: "hybrid"}, Options{Accessible: true, InlineSelectors: true, FormatExplicit: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if selector.step != "type" || owner.draft.Emoji != "" || !strings.Contains(ansi.Strip(selector.View().Content), "no classified gitmojis") {
+	if selector.step != "type" || owner.draft.Emoji != "" || !strings.Contains(ansi.Strip(selector.View().Content), "no classified emojis") {
 		t.Fatalf("empty category reused type options: step=%q draft=%+v view=%q", selector.step, owner.draft, selector.View().Content)
 	}
 	// A different category with entries can still be chosen.
@@ -303,7 +303,7 @@ func TestEmptyHybridCategory(t *testing.T) {
 	}
 	var output bytes.Buffer
 	draft, err := Run(context.Background(), strings.NewReader("1\n2\n1\nupdate guide\ny\n"), &output, owner.catalog, Draft{Mode: "hybrid"}, Options{Accessible: true, FormatExplicit: true, HideScope: true, HideBody: true})
-	if err != nil || draft.Type != "fix" || draft.Emoji != ":new:" || !strings.Contains(output.String(), "no classified gitmojis") {
+	if err != nil || draft.Type != "fix" || draft.Emoji != ":new:" || !strings.Contains(output.String(), "no classified emojis") {
 		t.Fatalf("numeric empty category: draft=%+v err=%v output=%q", draft, err, output.String())
 	}
 }

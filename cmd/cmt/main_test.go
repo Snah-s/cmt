@@ -14,7 +14,7 @@ import (
 )
 
 func TestPrototypeProcess(t *testing.T) {
-	if os.Getenv("GITMOJI_TEST_PROCESS") != "1" {
+	if os.Getenv("CMT_TEST_PROCESS") != "1" {
 		return
 	}
 	for i, arg := range os.Args {
@@ -29,7 +29,7 @@ func TestPrototypeProcess(t *testing.T) {
 
 // The installed wrapper invokes this test binary exactly like the native CLI.
 func TestMain(m *testing.M) {
-	if os.Getenv("GITMOJI_TEST_NATIVE") == "1" {
+	if os.Getenv("CMT_TEST_NATIVE") == "1" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		code := run(ctx, os.Args[1:])
 		stop()
@@ -61,7 +61,7 @@ func TestCLIWithoutTTY(t *testing.T) {
 			defer cancel()
 			cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestPrototypeProcess$", "--"}, test.args...)...)
 			cmd.Dir = t.TempDir()
-			cmd.Env = append(testEnvironment(t), "GITMOJI_TEST_PROCESS=1", "PATH=/no/git/node")
+			cmd.Env = append(testEnvironment(t), "CMT_TEST_PROCESS=1", "PATH=/no/git/node")
 			var out, stderr bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &stderr

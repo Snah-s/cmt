@@ -28,7 +28,7 @@ func run(ctx context.Context, args []string) int {
 		return writeText(cli.Help)
 	}
 	if o.Version {
-		return writeText(fmt.Sprintf("gitmoji %s (native, %s/%s, %s, revision %s, commit date %s)", version, runtime.GOOS, runtime.GOARCH, runtime.Version(), revision, buildDate))
+		return writeText(fmt.Sprintf("cmt %s (native, %s/%s, %s, revision %s, commit date %s)", version, runtime.GOOS, runtime.GOARCH, runtime.Version(), revision, buildDate))
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -143,7 +143,7 @@ func run(ctx context.Context, args []string) int {
 		}
 		return 0
 	case "update":
-		changed, err := catalog.Update(ctx, nil, p.GitmojisURL, cachePath, c)
+		changed, err := catalog.Update(ctx, nil, p.CatalogURL, cachePath, c)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
@@ -196,9 +196,6 @@ func run(ctx context.Context, args []string) int {
 			return gitFailure(errors.New("managed prepare-commit-msg hook is active; use git commit or remove the managed hook before using this client"))
 		}
 		confirmation = "Creates a Git commit from the index."
-		if p.AutoAdd {
-			confirmation = "Stages changes under the current directory and creates a Git commit."
-		}
 	} else if !o.Prototype && o.Command == "hook" {
 		confirmation = "Saves the message file; Git continues the commit."
 	}
@@ -237,7 +234,7 @@ func run(ctx context.Context, args []string) int {
 		}
 		return 0
 	}
-	if err := repo.Commit(ctx, message.Text, p.AutoAdd, os.Stdin, os.Stdout, os.Stderr); err != nil {
+	if err := repo.Commit(ctx, message.Text, os.Stdin, os.Stdout, os.Stderr); err != nil {
 		return gitFailure(err)
 	}
 	return 0

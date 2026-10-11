@@ -107,7 +107,7 @@ func TestCommitPreservesIndexAndVerbatimMessage(t *testing.T) {
 	write(t, path, "staged\nunstaged\n", 0600)
 	message := "fix: preserve quotes ' and dollars $()\n\n# body content\n  indented\n\nSigned-off-by: Test <test@example.invalid>\n"
 	var stdout, stderr bytes.Buffer
-	if err := r.Commit(ctx, message, false, strings.NewReader("stdin\n"), &stdout, &stderr); err != nil {
+	if err := r.Commit(ctx, message, strings.NewReader("stdin\n"), &stdout, &stderr); err != nil {
 		t.Fatalf("commit: %v: %s", err, &stderr)
 	}
 	if got := command(t, r.Dir, "show", "HEAD:file"); got != "staged" {
@@ -122,13 +122,13 @@ func TestCommitPreservesIndexAndVerbatimMessage(t *testing.T) {
 	if stdout.Len() == 0 {
 		t.Fatal("Git stdout was not forwarded")
 	}
-	err := r.Commit(ctx, "chore: empty\n", false, nil, &stdout, &stderr)
+	err := r.Commit(ctx, "chore: empty\n", nil, &stdout, &stderr)
 	if ExitCode(err) != 1 {
 		t.Fatalf("empty commit accepted: %v", err)
 	}
 }
 
-func TestAutoAddOnlyInvocationDirectory(t *testing.T) {
+func TestCommitOnlyIndexFromSubdirectory(t *testing.T) {
 	ctx := context.Background()
 	r := testRepo(t)
 	write(t, filepath.Join(r.Dir, "outside"), "original", 0600)
@@ -136,7 +136,9 @@ func TestAutoAddOnlyInvocationDirectory(t *testing.T) {
 	command(t, r.Dir, "add", ".")
 	command(t, r.Dir, "commit", "-qm", "initial")
 	write(t, filepath.Join(r.Dir, "outside"), "changed", 0600)
+	command(t, r.Dir, "add", "outside")
 	write(t, filepath.Join(r.Dir, "sub", "inside"), "changed", 0600)
+	write(t, filepath.Join(r.Dir, "sub", "untracked"), "new", 0600)
 	sub, err := Open(ctx, filepath.Join(r.Dir, "sub"))
 	if err != nil {
 		t.Fatal(err)
@@ -144,14 +146,20 @@ func TestAutoAddOnlyInvocationDirectory(t *testing.T) {
 	if sub.Dir != filepath.Join(r.Dir, "sub") {
 		t.Fatal("Open discarded invocation directory")
 	}
-	if err := sub.Commit(ctx, "fix: inside\n", true, nil, nil, nil); err != nil {
+	if err := sub.Commit(ctx, "fix: inside\n", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := command(t, r.Dir, "show", "HEAD:outside"); got != "original" {
-		t.Fatalf("autoAdd staged outside cwd: %q", got)
+	if got := command(t, r.Dir, "show", "HEAD:outside"); got != "changed" {
+		t.Fatalf("missed staged file outside cwd: %q", got)
 	}
-	if got := command(t, r.Dir, "show", "HEAD:sub/inside"); got != "changed" {
-		t.Fatalf("autoAdd missed cwd: %q", got)
+	if got := command(t, r.Dir, "show", "HEAD:sub/inside"); got != "original" {
+		t.Fatalf("committed unstaged file inside cwd: %q", got)
+	}
+	if got := command(t, r.Dir, "ls-files", "--others", "--exclude-standard"); got != "sub/untracked" {
+		t.Fatalf("untracked file changed: %q", got)
+	}
+	if got := command(t, r.Dir, "diff", "--cached", "--name-only"); got != "" {
+		t.Fatalf("commit added files to the index: %q", got)
 	}
 }
 
@@ -169,7 +177,8 @@ func TestHookOwnershipAndBlocking(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, content := range []string{
-		"#!/bin/sh\n# gitmoji-native managed hook v1\necho foreign\n",
+		"#!/bin/sh\n# cmt-native managed hook v1\necho foreign\n",
+		previousHookPrefix + "'/tmp/previous'" + hookSuffix + "echo extra\n",
 		legacyHook + "\n",
 		hookPrefix + "'/tmp/valid'" + hookSuffix + "echo extra\n",
 		hookPrefix + "'/tmp/path'; echo bad #" + hookSuffix,
@@ -187,6 +196,21 @@ func TestHookOwnershipAndBlocking(t *testing.T) {
 		if got, err := os.ReadFile(path); err != nil || string(got) != content {
 			t.Fatal("foreign hook changed")
 		}
+	}
+	previous := previousHookPrefix + shellQuote("/tmp/gitmoji") + hookSuffix
+	write(t, path, previous, 0755)
+	if active, err := r.HasManagedHook(ctx); err != nil || !active {
+		t.Fatalf("previous native hook not recognized: %v %v", active, err)
+	}
+	if err := r.InstallHook(ctx, "/tmp/cmt"); err != nil {
+		t.Fatalf("previous native hook not upgraded: %v", err)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != hookPrefix+shellQuote("/tmp/cmt")+hookSuffix {
+		t.Fatal("upgraded hook does not use cmt")
+	}
+	write(t, path, previous, 0755)
+	if err := r.RemoveHook(ctx); err != nil {
+		t.Fatalf("previous native hook not removed: %v", err)
 	}
 	write(t, path, legacyHook, 0755)
 	if active, err := r.HasManagedHook(ctx); err != nil || !active {
@@ -210,7 +234,7 @@ func TestHookOwnershipAndBlocking(t *testing.T) {
 		t.Fatalf("wrapper forwarded arguments incorrectly: %q %v", out, err)
 	}
 	write(t, filepath.Join(r.Dir, "untracked"), "keep unstaged", 0600)
-	if err := r.Commit(ctx, "fix: blocked\n", true, nil, nil, nil); err == nil {
+	if err := r.Commit(ctx, "fix: blocked\n", nil, nil, nil); err == nil {
 		t.Fatal("client did not block managed hook")
 	}
 	if got := command(t, r.Dir, "diff", "--cached", "--name-only"); got != "" {
@@ -245,7 +269,7 @@ func TestHookOwnershipAndBlocking(t *testing.T) {
 	if active, err := r.HasManagedHook(ctx); err != nil || !active {
 		t.Fatalf("active managed symlink was not detected: %v %v", active, err)
 	}
-	if err := r.Commit(ctx, "fix: blocked symlink\n", true, nil, nil, nil); err == nil {
+	if err := r.Commit(ctx, "fix: blocked symlink\n", nil, nil, nil); err == nil {
 		t.Fatal("client bypassed an active managed symlink")
 	}
 	if err := r.RemoveHook(ctx); err == nil {
@@ -278,13 +302,13 @@ func TestWindowsManagedHookGuard(t *testing.T) {
 		t.Fatalf("legacy hook must block the client: %v %v", active, err)
 	}
 	write(t, filepath.Join(r.Dir, "unstaged"), "keep", 0600)
-	if err := r.Commit(ctx, "docs: blocked\n", true, nil, nil, nil); err == nil {
+	if err := r.Commit(ctx, "docs: blocked\n", nil, nil, nil); err == nil {
 		t.Fatal("client bypassed a managed hook on Windows")
 	}
 	if command(t, r.Dir, "diff", "--cached", "--name-only") != "" {
 		t.Fatal("blocked client staged files")
 	}
-	if err := r.InstallHook(ctx, filepath.Join(r.Dir, "gitmoji.exe")); err == nil {
+	if err := r.InstallHook(ctx, filepath.Join(r.Dir, "cmt.exe")); err == nil {
 		t.Fatal("unvalidated Windows installation succeeded")
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != legacyHook {
@@ -299,7 +323,7 @@ func TestGitHookFailurePreservesStatusAndStreams(t *testing.T) {
 	command(t, r.Dir, "add", ".")
 	write(t, filepath.Join(r.Dir, ".git", "hooks", "prepare-commit-msg"), "#!/bin/sh\necho hook-stdout\necho hook-stderr >&2\nexit 23\n", 0755)
 	var stdout, stderr bytes.Buffer
-	err := r.Commit(ctx, "fix: refused\n", false, nil, &stdout, &stderr)
+	err := r.Commit(ctx, "fix: refused\n", nil, &stdout, &stderr)
 	// Git maps a failing hook to its own status 1 rather than the hook's status.
 	if ExitCode(err) != 1 || !strings.Contains(stderr.String(), "hook-stderr") || !strings.Contains(stdout.String()+stderr.String(), "hook-stdout") {
 		t.Fatalf("Git failure: %v, stdout=%q stderr=%q", err, &stdout, &stderr)
@@ -328,7 +352,7 @@ func TestHooksPathWorktreeAndRebase(t *testing.T) {
 	}
 	for _, hooks := range []string{"relative hooks", filepath.Join(t.TempDir(), "absolute hooks")} {
 		command(t, r.Dir, "config", "core.hooksPath", hooks)
-		if err := sub.InstallHook(ctx, "/tmp/gitmoji"); err != nil {
+		if err := sub.InstallHook(ctx, "/tmp/cmt"); err != nil {
 			t.Fatal(err)
 		}
 		expected := hooks
@@ -349,7 +373,7 @@ func TestHooksPathWorktreeAndRebase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := worktree.InstallHook(ctx, "/tmp/gitmoji"); err != nil {
+	if err := worktree.InstallHook(ctx, "/tmp/cmt"); err != nil {
 		t.Fatal(err)
 	}
 	if active, err := r.HasManagedHook(ctx); err != nil || !active {
@@ -374,7 +398,7 @@ func TestHooksPathWorktreeAndRebase(t *testing.T) {
 		}
 	}
 	command(t, linked, "config", "core.hooksPath", "worktree hooks")
-	if err := worktree.InstallHook(ctx, "/tmp/gitmoji"); err != nil {
+	if err := worktree.InstallHook(ctx, "/tmp/cmt"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(linked, "worktree hooks", "prepare-commit-msg")); err != nil {

@@ -24,7 +24,7 @@ func TestConfigurationAndOfflineCatalog(t *testing.T) {
 	if err := os.MkdirAll(cwd, 0700); err != nil {
 		t.Fatal(err)
 	}
-	env := append(os.Environ(), "GITMOJI_TEST_PROCESS=1", "HOME="+home, "USERPROFILE="+home, "XDG_CONFIG_HOME="+filepath.Join(home, "config"), "APPDATA="+filepath.Join(home, "config"), "PATH=/no/git/node")
+	env := append(os.Environ(), "CMT_TEST_PROCESS=1", "HOME="+home, "USERPROFILE="+home, "XDG_CONFIG_HOME="+filepath.Join(home, "config"), "APPDATA="+filepath.Join(home, "config"), "PATH=/no/git/node")
 	execute := func(code int, args ...string) (string, string) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
@@ -73,7 +73,7 @@ func TestConfigurationAndOfflineCatalog(t *testing.T) {
 	if err != nil || p.CommitFormat != "hybrid" {
 		t.Fatalf("invalid update changed profile: %+v %v", p, err)
 	}
-	project := filepath.Join(cwd, ".gitmojirc.json")
+	project := filepath.Join(cwd, ".cmtrc.json")
 	if err := os.WriteFile(project, []byte(`{}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestConfigurationAndOfflineCatalog(t *testing.T) {
 	if !strings.Contains(search, ":bug:") || !strings.Contains(search, ":rotating_light:") || !strings.Contains(headers, `Search: "bug"`) || !strings.Contains(headers, `Search: "linter"`) {
 		t.Fatalf("multiple search: %q / %q", search, headers)
 	}
-	cache := filepath.Join(home, ".gitmoji", "gitmojis.json")
+	cache := filepath.Join(home, ".cmt", "emojis.json")
 	if err := os.MkdirAll(filepath.Dir(cache), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestConfigurationAndOfflineCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	execute(0, "config", "--set", "gitmojisUrl="+string(urlJSON))
+	execute(0, "config", "--set", "catalogUrl="+string(urlJSON))
 	execute(0, "update")
 	updated, err := os.ReadFile(cache)
 	if err != nil || !strings.Contains(string(updated), "Changed catalog content") {

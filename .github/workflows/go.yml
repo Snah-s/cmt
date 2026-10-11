@@ -60,12 +60,12 @@ jobs:
           fi
           mkdir unpacked
           tar -xzf dist/*.tar.gz -C unpacked
-          artifact=$(find "$PWD/unpacked" -type f \( -name gitmoji -o -name gitmoji.exe \))
+          artifact=$(find "$PWD/unpacked" -type f \( -name cmt -o -name cmt.exe \))
           if [ "$RUNNER_OS" = Windows ]; then artifact=$(cygpath -w "$artifact"); fi
-          GITMOJI_ARTIFACT="$artifact" go test ./cmd/gitmoji -run '^TestReleaseArtifact$' -count=1 -v
+          CMT_ARTIFACT="$artifact" go test ./cmd/cmt -run '^TestReleaseArtifact$' -count=1 -v
       - uses: actions/upload-artifact@v7
         with:
-          name: gitmoji-${{ matrix.os }}-${{ matrix.arch }}-candidate
+          name: cmt-${{ matrix.os }}-${{ matrix.arch }}-candidate
           path: dist/*
           if-no-files-found: error
           retention-days: 14

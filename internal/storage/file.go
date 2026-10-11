@@ -22,7 +22,7 @@ func writeFile(path string, data []byte, mode fs.FileMode, replace bool) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".gitmoji-*")
+	tmp, err := os.CreateTemp(dir, ".cmt-*")
 	if err != nil {
 		return err
 	}

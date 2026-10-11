@@ -122,7 +122,7 @@ func (m *model) validateType(kind string) error {
 		return errors.New("choose one of the listed types")
 	}
 	if m.draft.Mode == "hybrid" && len(m.catalog.Types[kind]) == 0 {
-		return fmt.Errorf("%s has no classified gitmojis in this catalog; choose another type or use standard/emoji mode", kind)
+		return fmt.Errorf("%s has no classified emojis in this catalog; choose another type or use standard/emoji mode", kind)
 	}
 	return nil
 }
@@ -346,7 +346,7 @@ func (m *inlineSelectorModel) answer() string {
 		return "? Choose a commit type: " + m.owner.draft.Type
 	case "emoji":
 		if entry, ok := m.owner.catalog.Find(m.owner.draft.Emoji); ok {
-			return "? Choose a gitmoji: " + entry.Emoji + " - " + entry.Description
+			return "? Choose an emoji: " + entry.Emoji + " - " + entry.Description
 		}
 	case "scope":
 		if m.owner.draft.Scope == "" {
@@ -390,7 +390,7 @@ func (m *inlineSelectorModel) validate(value string) error {
 			(m.owner.draft.Mode != "hybrid" || m.owner.catalog.Compatible(m.owner.draft.Type, value)) {
 			return nil
 		}
-		return errors.New("choose a compatible gitmoji")
+		return errors.New("choose a compatible emoji")
 	case "scope":
 		if slices.Contains(m.owner.scopeChoices(), value) || value == "" {
 			return commit.ValidateScope(value)
@@ -451,7 +451,7 @@ func (m *inlineSelectorModel) configure(step string) {
 	case "type":
 		title, options, value = "Choose a commit type", huh.NewOptions(commit.Types...), &m.owner.draft.Type
 	case "emoji":
-		title, options, value = "Choose a gitmoji", m.owner.emojiOptions(), &m.owner.draft.Emoji
+		title, options, value = "Choose an emoji", m.owner.emojiOptions(), &m.owner.draft.Emoji
 	case "scope":
 		title, value = "Choose a scope (optional)", &m.owner.draft.Scope
 		options = append(options, huh.NewOption("Skip scope", ""))
@@ -565,7 +565,7 @@ func (m *model) selectionFields(r *lineReader, output io.Writer) error {
 	}
 	reconcile(&m.draft, m.catalog)
 	if m.draft.Mode != "standard" {
-		if err := accessibleSelect(r, output, "Choose a gitmoji", &m.draft.Emoji, m.emojiOptions(), nil); err != nil {
+		if err := accessibleSelect(r, output, "Choose an emoji", &m.draft.Emoji, m.emojiOptions(), nil); err != nil {
 			return err
 		}
 	}

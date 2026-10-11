@@ -78,7 +78,8 @@ func (r Repo) CommentPrefix(ctx context.Context) (string, error) {
 	return prefix, nil
 }
 
-const hookPrefix = "#!/bin/sh\n# gitmoji-native managed hook v1\nexec "
+const hookPrefix = "#!/bin/sh\n# cmt-native managed hook v1\nexec "
+const previousHookPrefix = "#!/bin/sh\n# gitmoji-native managed hook v1\nexec "
 const hookSuffix = " hook \"$@\"\n"
 
 // Exact contents from gitmoji-cli c4b0e56adea61c9e279b18d16cd46a837dd4bd55,
@@ -97,10 +98,14 @@ func managed(data []byte) bool {
 	if content == legacyHook {
 		return true
 	}
-	if !strings.HasPrefix(content, hookPrefix) || !strings.HasSuffix(content, hookSuffix) {
+	prefix := hookPrefix
+	if strings.HasPrefix(content, previousHookPrefix) {
+		prefix = previousHookPrefix
+	}
+	if !strings.HasPrefix(content, prefix) || !strings.HasSuffix(content, hookSuffix) {
 		return false
 	}
-	quoted := strings.TrimSuffix(strings.TrimPrefix(content, hookPrefix), hookSuffix)
+	quoted := strings.TrimSuffix(strings.TrimPrefix(content, prefix), hookSuffix)
 	if len(quoted) < 2 || quoted[0] != '\'' || quoted[len(quoted)-1] != '\'' {
 		return false
 	}
@@ -217,7 +222,7 @@ func (r Repo) RebaseActive(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-func (r Repo) Commit(ctx context.Context, message string, autoAdd bool, input io.Reader, output, errorOutput io.Writer) error {
+func (r Repo) Commit(ctx context.Context, message string, input io.Reader, output, errorOutput io.Writer) error {
 	active, err := r.HasManagedHook(ctx)
 	if err != nil {
 		return err
@@ -225,16 +230,11 @@ func (r Repo) Commit(ctx context.Context, message string, autoAdd bool, input io
 	if active {
 		return errors.New("the managed prepare-commit-msg hook is active; use git commit or remove the hook first")
 	}
-	if autoAdd {
-		if err := r.run(ctx, input, output, errorOutput, "add", "."); err != nil {
-			return err
-		}
-	}
 	tempDir, err := filepath.Abs(os.TempDir())
 	if err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(tempDir, "gitmoji-message-*")
+	file, err := os.CreateTemp(tempDir, "cmt-message-*")
 	if err != nil {
 		return err
 	}

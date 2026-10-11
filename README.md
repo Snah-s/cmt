@@ -1,26 +1,25 @@
 # cmt
 
-Migration of `gitmoji-cli` to a native Go CLI with `emoji`, `standard`, and
-`hybrid` commit modes.
+Native Go CLI for preparing commits with `emoji`, `standard`, and `hybrid` modes.
 
 From an extracted package, run the standalone executable:
 
 ```sh
-./gitmoji --help
-./gitmoji prototype --format standard --type feat --title "add search"
+./cmt --help
+./cmt prototype --format standard --type feat --title "add search"
 ```
 
 Go is required only to build from a source checkout; its minimum version is
 declared in [go.mod](go.mod). The source commands below require that checkout,
 which is not included in the binary package.
 
-Prepare a message: `go run ./cmd/gitmoji prototype --type feat --title "add search"`.
-Create a commit from the index: `go run ./cmd/gitmoji commit --type feat --title "add search"`.
+Prepare a message: `go run ./cmd/cmt prototype --type feat --title "add search"`.
+Create a commit from the index: `go run ./cmd/cmt commit --type feat --title "add search"`.
 
 List or search the offline catalog with `list` and `search bug linter`.
 Inspect preferences with `config --show`, or save a mode with
 `config --set 'commitFormat="hybrid"'`. `update` refreshes the catalog only when
-requested; normal use is offline. Run `gitmoji --help` for commands and flags.
+requested; normal use is offline. Run `cmt --help` for commands and flags.
 
 `standard` is the default. Use `--format emoji` or `--format hybrid` to select
 another mode, `--title` for the description, `--scope` for an optional scope,
@@ -28,13 +27,15 @@ and `--message` for the body. Types are `feat`, `fix`, `docs`, `refactor`, `test
 and `chore`. In a terminal, review the prompts and confirm before committing.
 The body prompt accepts one optional line; leaving it empty omits the body.
 Without a terminal, complete arguments authorize the commit directly.
-The index is preserved unless you explicitly enable `autoAdd`.
+Only changes already staged with `git add` are committed, including partial
+selections. cmt never stages untracked files or unstaged changes. The retired
+`autoAdd` preference in older profiles is ignored.
 
 Compile a persistent executable before installing a hook:
 
 ```sh
-go build -o ./bin/gitmoji ./cmd/gitmoji
-./bin/gitmoji init
+go build -o ./bin/cmt ./cmd/cmt
+./bin/cmt init
 ```
 
 Hooks record the absolute executable path. Re-run `init` after moving the binary;
@@ -63,13 +64,13 @@ native CI before being advertised.
 Use a package that has passed native execution checks. From its download directory:
 
 ```sh
-sha256sum -c gitmoji_0.1.0-rc.1_linux_amd64.tar.gz.sha256
-tar -xzf gitmoji_0.1.0-rc.1_linux_amd64.tar.gz
+sha256sum -c cmt_0.1.0-rc.1_linux_amd64.tar.gz.sha256
+tar -xzf cmt_0.1.0-rc.1_linux_amd64.tar.gz
 mkdir -p "$HOME/.local/bin"
-cp gitmoji_0.1.0-rc.1_linux_amd64/gitmoji "$HOME/.local/bin/gitmoji"
-chmod 755 "$HOME/.local/bin/gitmoji"
-"$HOME/.local/bin/gitmoji" --version
-command -v gitmoji
+cp cmt_0.1.0-rc.1_linux_amd64/cmt "$HOME/.local/bin/cmt"
+chmod 755 "$HOME/.local/bin/cmt"
+"$HOME/.local/bin/cmt" --version
+command -v cmt
 ```
 
 Add `$HOME/.local/bin` to PATH if needed. The checksum checks integrity against
@@ -80,14 +81,17 @@ publication requires accepted native checks and an authorized tag/release.
 ## Preferences and return to the previous version
 
 `config --show` reports effective preferences and their source. The nearest
-project configuration wins: the `gitmoji` key in `package.json`, then
-`.gitmojirc.json` in each directory up to the root. Otherwise, global preferences
+project configuration wins: the `cmt` key in `package.json`, then
+`.cmtrc.json` in each directory up to the root. Otherwise, global preferences
 under the user's configuration directory apply. Reading JSON requires no Node.
+The global profile is `os.UserConfigDir()/cmt/config.json`; the offline cache is
+`~/.cmt/emojis.json`. `catalogUrl` controls the catalog update source.
 
 Back up the previous executable, hook and profile before trying the candidate.
-Import a legacy profile explicitly with `gitmoji config --import-legacy FILE`.
-Import preserves the original and refuses to overwrite a native profile;
-legacy profiles without a commit format use `emoji`, while new profiles use
+Import a legacy profile explicitly with `cmt config --import FILE`.
+Import preserves the original and refuses to overwrite a native profile.
+The legacy `gitmojisUrl` preference is imported as `catalogUrl`.
+Legacy profiles without a commit format use `emoji`, while new profiles use
 `standard`. Native search does not reproduce the previous Fuse.js fuzzy ranking.
 
 To return, run the native executable by absolute path with `remove` in each

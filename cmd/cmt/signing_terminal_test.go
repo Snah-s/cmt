@@ -53,7 +53,7 @@ func TestSignedTerminalCommit(t *testing.T) {
 	gitCommand(t, dir, env, "config", "gpg.program", gpg)
 	gitCommand(t, dir, env, "config", "commit.gpgsign", "true")
 	gitCommand(t, dir, env, "config", "user.signingkey", "phase5@example.invalid")
-	if err := os.WriteFile(filepath.Join(dir, ".gitmojirc.json"), []byte(`{"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "signed"), []byte("content"), 0600); err != nil {

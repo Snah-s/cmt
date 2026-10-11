@@ -20,7 +20,7 @@ import (
 	"github.com/Snah-s/cmt/internal/storage"
 )
 
-//go:embed assets/gitmojis.json assets/commit-emojis.json
+//go:embed assets/emojis.json assets/commit-emojis.json
 var assets embed.FS
 
 const maxCatalogBytes = 1 << 20
@@ -40,7 +40,7 @@ type Catalog struct {
 }
 
 func Load() (Catalog, error) {
-	data, err := assets.ReadFile("assets/gitmojis.json")
+	data, err := assets.ReadFile("assets/emojis.json")
 	if err != nil {
 		return Catalog{}, err
 	}
@@ -76,12 +76,12 @@ func decode(data []byte) (Catalog, error) {
 		}
 	} else {
 		var document struct {
-			Gitmojis []Emoji `json:"gitmojis"`
+			Entries []Emoji `json:"gitmojis"`
 		}
 		if err := json.Unmarshal(data, &document); err != nil {
 			return c, fmt.Errorf("invalid catalog JSON: %w", err)
 		}
-		c.Entries = document.Gitmojis
+		c.Entries = document.Entries
 	}
 	if len(c.Entries) == 0 {
 		return c, fmt.Errorf("catalog is empty")
@@ -149,7 +149,7 @@ func read(r io.Reader) (Catalog, error) {
 	return c, nil
 }
 
-// ReadFile accepts the legacy array and the official gitmojis object.
+// ReadFile accepts arrays and the upstream API object.
 func ReadFile(path string) (Catalog, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -167,7 +167,7 @@ func CachePath() (string, error) {
 	if !filepath.IsAbs(home) {
 		return "", fmt.Errorf("home directory must be absolute")
 	}
-	return filepath.Join(home, ".gitmoji", "gitmojis.json"), nil
+	return filepath.Join(home, ".cmt", "emojis.json"), nil
 }
 
 // Search ranks exact name/description, name prefix, description prefix, name

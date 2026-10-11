@@ -13,9 +13,9 @@ import (
 
 // Run explicitly against the executable extracted from a candidate archive.
 func TestReleaseArtifact(t *testing.T) {
-	binary := os.Getenv("GITMOJI_ARTIFACT")
+	binary := os.Getenv("CMT_ARTIFACT")
 	if binary == "" {
-		t.Skip("set GITMOJI_ARTIFACT to a packaged executable")
+		t.Skip("set CMT_ARTIFACT to a packaged executable")
 	}
 	binary, err := filepath.Abs(binary)
 	if err != nil {
@@ -45,10 +45,12 @@ func TestReleaseArtifact(t *testing.T) {
 	}
 	// No external tools, even if Node is installed on the development runner.
 	offline := append(append([]string{}, env...), "PATH="+t.TempDir())
-	if text := run(binary, offline, 0, "--version"); !strings.Contains(text, "native, "+runtime.GOOS+"/"+runtime.GOARCH) || strings.Contains(text, "revision unknown") {
+	if text := run(binary, offline, 0, "--version"); !strings.HasPrefix(text, "cmt ") || !strings.Contains(text, "native, "+runtime.GOOS+"/"+runtime.GOARCH) || strings.Contains(text, "revision unknown") {
 		t.Fatalf("missing artifact build information: %s", text)
 	}
-	run(binary, offline, 0, "--help")
+	if text := run(binary, offline, 0, "--help"); !strings.HasPrefix(text, "Usage: cmt ") {
+		t.Fatalf("incorrect command name: %s", text)
+	}
 	if text := run(binary, offline, 0, "list"); !strings.Contains(text, ":sparkles:") {
 		t.Fatal("embedded catalog missing")
 	}
@@ -82,7 +84,24 @@ func TestReleaseArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	run(git, env, 0, "add", "file")
+	if err := os.WriteFile(path, []byte("staged\nunstaged\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"autoAdd":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	run(binary, env, 0, "commit", "--type=docs", "--title=verify package", "--message=  literal body")
+	if text := run(git, env, 0, "show", "HEAD:file"); text != "staged\n" {
+		t.Fatalf("packaged client committed unstaged content: %q", text)
+	}
+	if text := run(git, env, 0, "ls-files", "--others", "--exclude-standard"); !strings.Contains(text, ".cmtrc.json") {
+		t.Fatalf("packaged client staged an untracked file: %q", text)
+	}
+	head := run(git, env, 0, "rev-parse", "HEAD")
+	run(binary, env, 1, "commit", "--type=docs", "--title=no staged changes")
+	if text := run(git, env, 0, "rev-parse", "HEAD"); text != head {
+		t.Fatal("packaged client created a commit without staged changes")
+	}
 	_, text, _ := strings.Cut(run(git, env, 0, "cat-file", "commit", "HEAD"), "\n\n")
 	if text != "docs: verify package\n\n  literal body" {
 		t.Fatalf("packaged client changed message: %q", text)

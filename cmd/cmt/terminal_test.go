@@ -47,10 +47,10 @@ func startTerminal(t *testing.T, cmd *exec.Cmd) *terminalSession {
 		t.Fatal(err)
 	}
 	cmd.Stdin, cmd.Stderr, cmd.Stdout = slave, slave, &s.stdout
-	cmd.Env = append(append(testEnvironment(t), "TERM=xterm-256color", "ACCESSIBLE=", "GITMOJI_TEST_PROCESS=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GPG_TTY="+slave.Name()), cmd.Env...)
+	cmd.Env = append(append(testEnvironment(t), "TERM=xterm-256color", "ACCESSIBLE=", "CMT_TEST_PROCESS=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GPG_TTY="+slave.Name()), cmd.Env...)
 	if cmd.Dir == "" {
 		cmd.Dir = t.TempDir()
-		if err := os.WriteFile(filepath.Join(cmd.Dir, ".gitmojirc.json"), []byte(`{"scopePrompt":true}`), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(cmd.Dir, ".cmtrc.json"), []byte(`{"scopePrompt":true}`), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -157,7 +157,7 @@ func TestTerminalFlow(t *testing.T) {
 				s.answer(t, "Choose a commit type", test.typeKeys)
 			}
 			if test.mode != "standard" {
-				s.answer(t, "Choose a gitmoji", "/memo\r")
+				s.answer(t, "Choose an emoji", "/memo\r")
 			}
 			s.answer(t, "Scope", "users\r")
 			s.answer(t, "Enter the commit title", "add résumé search\r")
@@ -183,7 +183,7 @@ func TestTerminalFlow(t *testing.T) {
 
 func TestInlineEmojiTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README"))
-	s.answer(t, "Choose a gitmoji", "/memo\r")
+	s.answer(t, "Choose an emoji", "/memo\r")
 	s.answer(t, "Scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
@@ -194,7 +194,7 @@ func TestInlineEmojiTerminal(t *testing.T) {
 	}
 	for _, key := range []string{"\x03", "\x1b"} {
 		s = startTerminal(t, helperCommand("prototype", "--format=emoji"))
-		s.answer(t, "Choose a gitmoji", key)
+		s.answer(t, "Choose an emoji", key)
 		s.finish(t, 130)
 	}
 }
@@ -203,7 +203,7 @@ func TestAccessibleTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--accessible"))
 	s.answer(t, "Choose a format", "\x1b[B\x1b[B\r")
 	s.answer(t, "Choose a commit type", "\x1b[B\x1b[B\r")
-	s.answer(t, "Choose a gitmoji", "/memo\r")
+	s.answer(t, "Choose an emoji", "/memo\r")
 	s.answer(t, "Scope", "\n")
 	s.answer(t, "Enter the commit title", "update guide\n")
 	s.answer(t, "Body (optional)", "\n")
@@ -277,7 +277,7 @@ func TestExplicitFormatAndHookConversion(t *testing.T) {
 		t.Fatalf("explicit format/defaults: %q / %q", ansi.Strip(s.text()), s.stdout.String())
 	}
 	s = startTerminal(t, helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README"))
-	s.answer(t, "Choose a gitmoji", "\r")
+	s.answer(t, "Choose an emoji", "\r")
 	s.answer(t, "Scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
@@ -293,7 +293,7 @@ func TestExplicitFormatAndHookConversion(t *testing.T) {
 	}
 	s = startTerminal(t, helperCommand("prototype", "--hook", path, "message", "--format=hybrid", "--type=docs", "--accessible"))
 	s.answer(t, "Choose a commit type", "\r")
-	s.answer(t, "Choose a gitmoji", "\r")
+	s.answer(t, "Choose an emoji", "\r")
 	s.answer(t, "Scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "converted details\r")
@@ -318,13 +318,13 @@ func TestExplicitFormatAndHookConversion(t *testing.T) {
 
 func TestPreferenceTerminal(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".gitmojirc.json"), []byte(`{"commitFormat":"emoji","emojiFormat":"code","capitalizeTitle":false,"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"commitFormat":"emoji","emojiFormat":"code","capitalizeTitle":false,"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README", "--scope=api", "--message=  original\n\nSigned-off-by: Ana\n")
 	cmd.Dir = dir
 	s := startTerminal(t, cmd)
-	s.answer(t, "Choose a gitmoji", "\r")
+	s.answer(t, "Choose an emoji", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Finish", "y\r")
 	s.finish(t, 0)
@@ -337,7 +337,6 @@ func TestPreferenceTerminal(t *testing.T) {
 	s.answer(t, "Commit format", "hybrid\n")
 	s.answer(t, "Emoji format", "code\n")
 	s.answer(t, "Capitalize", "n\n")
-	s.answer(t, "Automatically stage", "n\n")
 	s.answer(t, "Scope prompt", "false\n")
 	s.answer(t, "Prompt for a message body", "n\n")
 	s.answer(t, "Catalog URL", "\n")
@@ -374,7 +373,7 @@ func TestGitHookTerminalAndNoTTY(t *testing.T) {
 	git("config", "user.email", "phase1@example.invalid")
 	git("config", "commit.gpgsign", "false")
 	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
-	wrapper := "#!/bin/sh\nGITMOJI_TEST_PROCESS=1 " + quote(os.Args[0]) + " -test.run='^TestPrototypeProcess$' -- prototype --hook \"$1\" \"$2\" \"$3\"\n"
+	wrapper := "#!/bin/sh\nCMT_TEST_PROCESS=1 " + quote(os.Args[0]) + " -test.run='^TestPrototypeProcess$' -- prototype --hook \"$1\" \"$2\" \"$3\"\n"
 	if err := os.WriteFile(filepath.Join(repo, ".git", "hooks", "prepare-commit-msg"), []byte(wrapper), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +398,7 @@ func TestGitHookTerminalAndNoTTY(t *testing.T) {
 	}{{[]string{"prototype"}, 2}, {[]string{"prototype", "--hook", path}, 0}} {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestPrototypeProcess$", "--"}, test.args...)...)
-		cmd.Env = append(testEnvironment(t), "GITMOJI_TEST_PROCESS=1")
+		cmd.Env = append(testEnvironment(t), "CMT_TEST_PROCESS=1")
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		err := cmd.Run()
 		cancel()
@@ -423,10 +422,14 @@ func TestGitHookTerminalAndNoTTY(t *testing.T) {
 
 func TestNativeCommitTerminal(t *testing.T) {
 	dir, env := phase4Repo(t)
-	if err := os.WriteFile(filepath.Join(dir, ".gitmojirc.json"), []byte(`{"autoAdd":true,"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"autoAdd":true,"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "feature"), []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitCommand(t, dir, env, "add", "feature")
+	if err := os.WriteFile(filepath.Join(dir, "feature"), []byte("new\nnot staged"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(os.Args[0], "commit", "--format=standard", "--type=feat", "--title=add feature", "--message=  body\n\nSigned-off-by: Ana\n")
@@ -439,11 +442,15 @@ func TestNativeCommitTerminal(t *testing.T) {
 	if !strings.Contains(gitCommand(t, dir, env, "log", "-1", "--format=%B"), "feat: add feature\n\n  body\n\nSigned-off-by: Ana") {
 		t.Fatal("commit did not match the preview")
 	}
-	t.Run("autoAdd_disclosure", func(t *testing.T) {
-		if !strings.Contains(ansi.Strip(s.text()), "Stages changes") {
-			t.Fatal("confirmation did not disclose staging changes")
-		}
-	})
+	if !strings.Contains(ansi.Strip(s.text()), "Creates a Git commit from the index.") || strings.Contains(ansi.Strip(s.text()), "Stages changes") {
+		t.Fatal("confirmation did not describe committing only the index")
+	}
+	if gitCommand(t, dir, env, "show", "HEAD:feature") != "new" || gitCommand(t, dir, env, "diff", "--", "feature") == "" {
+		t.Fatal("interactive client committed unstaged content")
+	}
+	if !strings.Contains(gitCommand(t, dir, env, "ls-files", "--others", "--exclude-standard"), ".cmtrc.json") {
+		t.Fatal("interactive client staged untracked configuration")
+	}
 	if err := os.WriteFile(filepath.Join(dir, "pending"), []byte("keep unstaged"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +486,7 @@ func TestNativeCommitTerminal(t *testing.T) {
 
 func TestNativeHookConversionAndWriteFailure(t *testing.T) {
 	dir, env := phase4Repo(t)
-	if err := os.WriteFile(filepath.Join(dir, ".gitmojirc.json"), []byte(`{"commitFormat":"hybrid","emojiFormat":"code","scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"commitFormat":"hybrid","emojiFormat":"code","scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "message with spaces")
@@ -491,7 +498,7 @@ func TestNativeHookConversionAndWriteFailure(t *testing.T) {
 	cmd.Dir, cmd.Env = dir, env
 	s := startTerminal(t, cmd)
 	s.answer(t, "Choose a commit type", "\r")
-	s.answer(t, "Choose a gitmoji", "\r")
+	s.answer(t, "Choose an emoji", "\r")
 	s.answer(t, "Enter the commit title", "\n")
 	s.answer(t, "Finish", "y\n")
 	s.finish(t, 0)
@@ -521,7 +528,7 @@ func TestNativeHookConversionAndWriteFailure(t *testing.T) {
 		s := startTerminal(t, cmd)
 		s.answer(t, "Choose a commit type", test.key)
 		if test.code == 1 {
-			s.answer(t, "Choose a gitmoji", "\r")
+			s.answer(t, "Choose an emoji", "\r")
 			s.answer(t, "Enter the commit title", "\n")
 			s.answer(t, "Finish", "y\n")
 		}
@@ -535,7 +542,7 @@ func TestNativeHookConversionAndWriteFailure(t *testing.T) {
 func TestInstalledHookTemplateAndGitOperations(t *testing.T) {
 	dir, env := phase4Repo(t)
 	env = append(env, "ACCESSIBLE=1")
-	if err := os.WriteFile(filepath.Join(dir, ".gitmojirc.json"), []byte(`{"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	template := filepath.Join(t.TempDir(), "template with spaces")
