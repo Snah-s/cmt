@@ -28,7 +28,7 @@ func TestInlineSelectorEOF(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			draft, err := Run(ctx, input, io.Discard, testCatalog(t), Draft{}, Options{Accessible: true, InlineSelectors: true})
+			draft, err := Run(ctx, input, io.Discard, testCatalog(t), Draft{}, Options{InlineSelectors: true})
 			if !errors.Is(err, io.EOF) || ctx.Err() != nil || draft != (Draft{}) {
 				t.Fatalf("EOF: draft=%+v, err=%v, context=%v", draft, err, ctx.Err())
 			}
@@ -42,7 +42,7 @@ func TestInlineSelectorCancelBeforeEOF(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			input := iotest.DataErrReader(strings.NewReader(key))
-			_, err := Run(ctx, input, io.Discard, testCatalog(t), Draft{}, Options{Accessible: true, InlineSelectors: true})
+			_, err := Run(ctx, input, io.Discard, testCatalog(t), Draft{}, Options{InlineSelectors: true})
 			if !errors.Is(err, ErrCanceled) || ctx.Err() != nil {
 				t.Fatalf("last key: err=%v, context=%v", err, ctx.Err())
 			}

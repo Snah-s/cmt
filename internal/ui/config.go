@@ -5,58 +5,29 @@ import (
 	"encoding/json"
 	"io"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"github.com/Snah-s/cmt/internal/config"
 )
 
-func preferenceForm(ctx context.Context, input io.Reader, output io.Writer, accessible bool, fields ...huh.Field) error {
-	if accessible {
-		return runAccessible(ctx, input, func(reader io.Reader) error {
-			r := &lineReader{reader: reader}
-			for _, field := range fields {
-				if err := accessibleField(r, output, field); err != nil {
-					return err
-				}
+func preferenceForm(ctx context.Context, input io.Reader, output io.Writer, fields ...huh.Field) error {
+	return runAccessible(ctx, input, func(reader io.Reader) error {
+		r := &lineReader{reader: reader}
+		for _, field := range fields {
+			if err := accessibleField(r, output, field); err != nil {
+				return err
 			}
-			return nil
-		})
-	}
-	groups := make([]*huh.Group, 0, len(fields))
-	for _, field := range fields {
-		groups = append(groups, huh.NewGroup(field))
-	}
-	keys := huh.NewDefaultKeyMap()
-	keys.Quit.SetKeys("esc", "ctrl+c")
-	form := huh.NewForm(groups...).WithKeyMap(keys)
-	form.SubmitCmd, form.CancelCmd = tea.Quit, tea.Quit
-	err := runProgram(ctx, preferenceModel{form}, input, output)
-	if form.State == huh.StateAborted {
-		return ErrCanceled
-	}
-	return err
+		}
+		return nil
+	})
 }
 
-type preferenceModel struct{ *huh.Form }
-
-func (m preferenceModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	_, cmd := m.Form.Update(msg)
-	return m, cmd
-}
-
-func (m preferenceModel) View() tea.View {
-	v := tea.NewView(m.Form.View())
-	v.ReportFocus = true
-	return v
-}
-
-func ConfirmImport(ctx context.Context, input io.Reader, output io.Writer, accessible bool) (bool, error) {
+func ConfirmImport(ctx context.Context, input io.Reader, output io.Writer) (bool, error) {
 	confirmed := false
-	err := preferenceForm(ctx, input, output, accessible, huh.NewConfirm().Title("Import these legacy preferences?").Description("Writes a new native profile; preserves the original.").Value(&confirmed))
+	err := preferenceForm(ctx, input, output, huh.NewConfirm().Title("Import these legacy preferences?").Description("Writes a new native profile; preserves the original.").Value(&confirmed))
 	return confirmed, err
 }
 
-func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.Preferences, accessible bool) (config.Preferences, error) {
+func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.Preferences) (config.Preferences, error) {
 	scope := any(p.ScopePrompt)
 	if p.Scopes != nil {
 		scope = p.Scopes
@@ -91,7 +62,7 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 		}),
 		huh.NewConfirm().Title("Save global preferences?").Description("Project preferences may override these values.").Value(&confirmed),
 	}
-	if err := preferenceForm(ctx, input, output, accessible, fields...); err != nil {
+	if err := preferenceForm(ctx, input, output, fields...); err != nil {
 		return p, err
 	}
 	if !confirmed {

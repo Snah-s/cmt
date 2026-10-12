@@ -47,7 +47,7 @@ func configure(ctx context.Context, o cli.Options, cwd string) int {
 			return code
 		}
 		if interactive {
-			confirmed, err := ui.ConfirmImport(ctx, os.Stdin, os.Stderr, true)
+			confirmed, err := ui.ConfirmImport(ctx, os.Stdin, os.Stderr)
 			if err != nil {
 				return formError(err)
 			}
@@ -106,7 +106,7 @@ func configure(ctx context.Context, o cli.Options, cwd string) int {
 				if code := previewImport(source, candidate); code != 0 {
 					return code
 				}
-				confirmed, err := ui.ConfirmImport(ctx, os.Stdin, os.Stderr, true)
+				confirmed, err := ui.ConfirmImport(ctx, os.Stdin, os.Stderr)
 				if err != nil {
 					return formError(err)
 				}
@@ -122,7 +122,7 @@ func configure(ctx context.Context, o cli.Options, cwd string) int {
 				return 2
 			}
 		}
-		p, err = ui.Configure(ctx, os.Stdin, os.Stderr, p, true)
+		p, err = ui.Configure(ctx, os.Stdin, os.Stderr, p)
 		if err != nil {
 			return formError(err)
 		}

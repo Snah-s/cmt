@@ -18,7 +18,7 @@ func BenchmarkInlineSelectorStart(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		owner := newModel(c, Draft{Mode: "emoji"}, Options{Accessible: true, InlineSelectors: true, FormatExplicit: true})
+		owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{InlineSelectors: true, FormatExplicit: true})
 		selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 		selector.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
 		selector.View()
@@ -30,7 +30,7 @@ func BenchmarkInlineSelectorNavigation(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	owner := newModel(c, Draft{Mode: "emoji"}, Options{Accessible: true, InlineSelectors: true, FormatExplicit: true})
+	owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{InlineSelectors: true, FormatExplicit: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
 	b.ReportAllocs()

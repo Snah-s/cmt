@@ -200,7 +200,7 @@ func run(ctx context.Context, args []string) int {
 		confirmation = "Saves the message file; Git continues the commit."
 	}
 	if interactive {
-		draft, err = ui.Run(ctx, input, output, c, draft, ui.Options{Accessible: true, InlineSelectors: true, FormatExplicit: o.FormatSet, HideScope: !p.ScopePrompt, HideBody: !p.MessagePrompt, Scopes: p.Scopes, MessageOptions: messageOptions, ConfirmDescription: confirmation})
+		draft, err = ui.Run(ctx, input, output, c, draft, ui.Options{InlineSelectors: true, FormatExplicit: o.FormatSet, HideScope: !p.ScopePrompt, HideBody: !p.MessagePrompt, Scopes: p.Scopes, MessageOptions: messageOptions, ConfirmDescription: confirmation})
 		if errors.Is(err, ui.ErrCanceled) {
 			if o.Command == "hook" {
 				fmt.Fprintln(os.Stderr, "Canceled; the original message was preserved and Git may continue.")

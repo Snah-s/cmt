@@ -3,7 +3,6 @@ module github.com/Snah-s/cmt
 go 1.27.1
 
 require (
-	charm.land/bubbles/v2 v2.0.0
 	charm.land/bubbletea/v2 v2.0.9
 	charm.land/huh/v2 v2.0.3
 	github.com/charmbracelet/x/ansi v0.11.7
@@ -14,6 +13,7 @@ require (
 )
 
 require (
+	charm.land/bubbles/v2 v2.0.0 // indirect
 	charm.land/lipgloss/v2 v2.0.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
