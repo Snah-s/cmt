@@ -183,7 +183,7 @@ func TestTerminalFlow(t *testing.T) {
 
 func TestInlineEmojiTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README"))
-	s.answer(t, "Choose an emoji", "/memo\r")
+	s.answer(t, "Choose an emoji", "mmo\r")
 	s.answer(t, "Scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
@@ -196,6 +196,24 @@ func TestInlineEmojiTerminal(t *testing.T) {
 		s = startTerminal(t, helperCommand("prototype", "--format=emoji"))
 		s.answer(t, "Choose an emoji", key)
 		s.finish(t, 130)
+	}
+}
+
+func TestEmojiThenConfiguredScopeTerminal(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"scopePrompt":["api","cli"],"messagePrompt":false}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := helperCommand("prototype", "--format=emoji", "--title=update guide")
+	cmd.Dir = dir
+	s := startTerminal(t, cmd)
+	s.answer(t, "Choose an emoji", "memo\r")
+	s.answer(t, "Choose a scope", "\x1b[B\r")
+	s.answer(t, "Enter the commit title", "\r")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 0)
+	if got := s.stdout.String(); got != "📝 (api): Update guide\n" {
+		t.Fatalf("emoji to scope transition: %q", got)
 	}
 }
 
@@ -273,7 +291,7 @@ func TestExplicitFormatAndHookConversion(t *testing.T) {
 	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\r")
 	s.finish(t, 0)
-	if strings.Contains(ansi.Strip(s.text()), "Choose a format") || s.stdout.String() != "docs(api): update README\n" {
+	if strings.Contains(ansi.Strip(s.text()), "Choose a format") || s.stdout.String() != "docs(api): update README\n\n  body\n\nSigned-off-by: Ana\n" {
 		t.Fatalf("explicit format/defaults: %q / %q", ansi.Strip(s.text()), s.stdout.String())
 	}
 	s = startTerminal(t, helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README"))
@@ -569,6 +587,23 @@ func TestInstalledHookTemplateAndGitOperations(t *testing.T) {
 		t.Fatalf("template/comments/trailers: %q", message)
 	}
 	gitCommand(t, dir, env, "config", "--unset", "commit.template")
+	// -v puts the staged diff, control characters included, below the scissors; -s writes the trailer before the hook.
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte("form\ffeed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitCommand(t, dir, env, "add", "file")
+	cmd = exec.Command("git", "commit", "-v", "-s")
+	cmd.Dir, cmd.Env = dir, env
+	s = startTerminal(t, cmd)
+	s.answer(t, "Choose a format", "\r")
+	s.answer(t, "Choose a commit type", "\r")
+	s.answer(t, "Enter the commit title", "sign verbose commit\n")
+	s.answer(t, "Finish", "y\n")
+	s.finish(t, 0)
+	message = gitCommand(t, dir, env, "log", "-1", "--format=%B")
+	if !strings.HasPrefix(message, "feat: sign verbose commit\n\nSigned-off-by: ") {
+		t.Fatalf("verbose sign-off: %q", message)
+	}
 	// Amend and merge sources must not prompt, even with a controlling terminal.
 	cmd = exec.Command("git", "commit", "--amend", "--no-edit")
 	cmd.Dir, cmd.Env = dir, env

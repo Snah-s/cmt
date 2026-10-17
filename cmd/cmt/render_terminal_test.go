@@ -109,6 +109,41 @@ func TestEmojiSelectorScreen(t *testing.T) {
 					}
 				}
 			}
+			run("send-keys", "-t", "selector", "Down")
+			waitScreen("> " + first.Emoji + " " + first.Code + " " + first.Description)
+			run("send-keys", "-t", "selector", "Up")
+			last := c.Entries[len(c.Entries)-1]
+			beforeSearch := waitScreen("> " + last.Emoji + " " + last.Code + " " + last.Description)
+			helpRow := func(screen string) int {
+				for row, line := range strings.Split(screen, "\n") {
+					if strings.Contains(line, "Type to search") {
+						return row
+					}
+				}
+				return -1
+			}
+			run("send-keys", "-l", "-t", "selector", "sparlkes")
+			searchScreen := waitScreen("> ✨ :sparkles:")
+			if helpRow(searchScreen) != helpRow(beforeSearch) || helpRow(searchScreen) < 0 {
+				t.Fatalf("search changed the selector height: %s", searchScreen)
+			}
+			for _, line := range strings.Split(searchScreen, "\n") {
+				if strings.HasPrefix(line, "┃   ") {
+					t.Fatalf("single-result search left stale options: %s", searchScreen)
+				}
+			}
+			run("send-keys", "-t", "selector", "C-u")
+			waitScreen("> " + first.Emoji + " " + first.Code + " " + first.Description)
+			run("send-keys", "-l", "-t", "selector", "zzzzzzzz")
+			emptyScreen := waitScreen("No matching emojis")
+			if helpRow(emptyScreen) != helpRow(beforeSearch) || strings.Contains(emptyScreen, "┃ > ") {
+				t.Fatalf("empty search changed height or retained a selection: %s", emptyScreen)
+			}
+			run("send-keys", "-t", "selector", "Escape")
+			screen := waitScreen("> " + first.Emoji + " " + first.Code + " " + first.Description)
+			if strings.Contains(screen, "No matching emojis") || strings.Contains(screen, "sparlkes") || !strings.Contains(screen, "Previous terminal output") {
+				t.Fatalf("search left stale output or erased scrollback: %s", screen)
+			}
 		})
 	}
 }
