@@ -23,8 +23,10 @@ requested; normal use is offline. Run `cmt --help` for commands and flags.
 
 `standard` is the default. Use `--format emoji` or `--format hybrid` to select
 another mode, `--title` for the description, `--scope` for an optional scope,
-and `--message` for the body. Types are `feat`, `fix`, `docs`, `refactor`, `test`
-and `chore`. In a terminal, review the prompts and confirm before committing.
+and `--message` for the body. Types are the 11 of Conventional Commits tooling:
+`feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `style`, `build`, `ci`
+and `revert`.
+In a terminal, review the prompts and confirm before committing.
 
 Type directly in the emoji selector to search names, codes and descriptions.
 Exact matches come first; abbreviations and simple typos also match. Use ↑/↓

@@ -329,3 +329,29 @@ func TestEmptyHybridCategory(t *testing.T) {
 		t.Fatalf("compatible category could not be chosen: step=%q draft=%+v", selector.step, owner.draft)
 	}
 }
+
+func TestElevenTypesInSelector(t *testing.T) {
+	owner := newCommitForm(testCatalog(t), Draft{Mode: "hybrid"}, Options{FormatExplicit: true})
+	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
+	selector.Update(tea.WindowSizeMsg{Width: 40, Height: 15})
+	view := ansi.Strip(selector.View().Content)
+	if !strings.Contains(view, "feat      A new feature") {
+		t.Fatalf("type selector lacks descriptions: %q", view)
+	}
+	for _, line := range strings.Split(view, "\n") {
+		if ansi.StringWidth(line) > 40 {
+			t.Fatalf("type line overflows a 40-column terminal: %q", line)
+		}
+	}
+	press(selector, append(slices.Repeat([]rune{tea.KeyDown}, len(commit.Types)-1), tea.KeyEnter)...)
+	if owner.draft.Type != "revert" || selector.step != "emoji" {
+		t.Fatalf("last type: type=%q step=%q", owner.draft.Type, selector.step)
+	}
+	var codes []string
+	for _, option := range selector.emojis.options {
+		codes = append(codes, option.entry.Code)
+	}
+	if !slices.Equal(codes, []string{":rewind:", ":boom:"}) {
+		t.Fatalf("revert emojis: %v", codes)
+	}
+}

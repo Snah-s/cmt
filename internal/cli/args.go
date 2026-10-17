@@ -224,7 +224,7 @@ const Help = `Usage: cmt <command> [flags]
   hook, --hook FILE            Review and save file [source [object]] with TTY
 
   --format emoji|standard|hybrid   Default: standard; overrides preferences
-  --type feat|fix|docs|refactor|test|chore
+  --type feat|fix|docs|refactor|test|chore|perf|style|build|ci|revert
   --emoji :code:                  Exact catalog code
   --title DESCRIPTION            Description, without title prefixes
   --scope SCOPE                  Optional, lowercase

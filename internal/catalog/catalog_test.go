@@ -46,8 +46,24 @@ func TestEmbeddedClassification(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Entries) != 75 || len(c.Types) != 6 || !c.Compatible("fix", ":bug:") || c.Compatible("docs", ":bug:") {
+	if len(c.Entries) != 75 || len(c.Types) != len(CommitTypes) || !c.Compatible("fix", ":bug:") || c.Compatible("docs", ":bug:") {
 		t.Fatalf("unexpected embedded catalog: entries=%d, types=%v", len(c.Entries), c.Types)
+	}
+	// Accepted 2026-10-17: exact new types take their emojis, and 💥 goes with any type.
+	for _, pair := range [][2]string{{"perf", ":zap:"}, {"style", ":rotating_light:"}, {"ci", ":green_heart:"}, {"build", ":arrow_up:"}, {"chore", ":arrow_up:"}, {"revert", ":rewind:"}} {
+		if !c.Compatible(pair[0], pair[1]) {
+			t.Fatalf("%s should accept %s", pair[0], pair[1])
+		}
+	}
+	for _, pair := range [][2]string{{"refactor", ":zap:"}, {"chore", ":rotating_light:"}, {"chore", ":green_heart:"}, {"chore", ":construction_worker:"}} {
+		if c.Compatible(pair[0], pair[1]) {
+			t.Fatalf("%s should no longer accept %s", pair[0], pair[1])
+		}
+	}
+	for _, kind := range CommitTypes {
+		if !c.Compatible(kind, ":boom:") {
+			t.Fatalf("%s does not accept :boom:", kind)
+		}
 	}
 	for _, test := range []struct {
 		name   string
@@ -81,7 +97,7 @@ func TestReadFile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(c.Entries, entries) || len(c.Types) != 6 || !c.Compatible("fix", ":bug:") || c.Compatible("feat", ":sparkles:") {
+		if !reflect.DeepEqual(c.Entries, entries) || len(c.Types) != len(CommitTypes) || !c.Compatible("fix", ":bug:") || c.Compatible("feat", ":sparkles:") {
 			t.Fatalf("unexpected cache catalog: %+v", c)
 		}
 		for kind := range c.Types {

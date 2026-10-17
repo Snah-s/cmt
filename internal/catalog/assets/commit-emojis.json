@@ -4,6 +4,7 @@
     ":lipstick:",
     ":chart_with_upwards_trend:",
     ":globe_with_meridians:",
+    ":boom:",
     ":bento:",
     ":wheelchair:",
     ":speech_balloon:",
@@ -25,15 +26,24 @@
   "fix": [
     ":bug:",
     ":ambulance:",
+    ":lipstick:",
     ":lock:",
+    ":globe_with_meridians:",
     ":pencil2:",
     ":alien:",
+    ":boom:",
     ":wheelchair:",
+    ":speech_balloon:",
+    ":card_file_box:",
     ":children_crossing:",
     ":iphone:",
+    ":mag:",
     ":goal_net:",
+    ":dizzy:",
     ":passport_control:",
     ":adhesive_bandage:",
+    ":necktie:",
+    ":thread:",
     ":safety_vest:",
     ":airplane:",
     ":t-rex:"
@@ -42,15 +52,17 @@
     ":memo:",
     ":pencil2:",
     ":page_facing_up:",
+    ":boom:",
     ":bulb:",
     ":busts_in_silhouette:"
   ],
   "refactor": [
     ":art:",
-    ":zap:",
     ":fire:",
+    ":rotating_light:",
     ":recycle:",
     ":truck:",
+    ":boom:",
     ":building_construction:",
     ":label:",
     ":wastebasket:",
@@ -58,22 +70,21 @@
   ],
   "test": [
     ":white_check_mark:",
+    ":boom:",
     ":clown_face:",
     ":camera_flash:",
     ":seedling:",
     ":test_tube:"
   ],
   "chore": [
+    ":fire:",
     ":rocket:",
     ":tada:",
     ":closed_lock_with_key:",
     ":bookmark:",
-    ":rotating_light:",
-    ":green_heart:",
     ":arrow_down:",
     ":arrow_up:",
     ":pushpin:",
-    ":construction_worker:",
     ":heavy_plus_sign:",
     ":heavy_minus_sign:",
     ":wrench:",
@@ -81,6 +92,7 @@
     ":twisted_rightwards_arrows:",
     ":package:",
     ":page_facing_up:",
+    ":boom:",
     ":loud_sound:",
     ":mute:",
     ":busts_in_silhouette:",
@@ -91,5 +103,39 @@
     ":bricks:",
     ":technologist:",
     ":money_with_wings:"
+  ],
+  "perf": [
+    ":zap:",
+    ":boom:",
+    ":thread:"
+  ],
+  "style": [
+    ":art:",
+    ":rotating_light:",
+    ":boom:"
+  ],
+  "build": [
+    ":arrow_down:",
+    ":arrow_up:",
+    ":pushpin:",
+    ":construction_worker:",
+    ":heavy_plus_sign:",
+    ":heavy_minus_sign:",
+    ":wrench:",
+    ":hammer:",
+    ":package:",
+    ":boom:",
+    ":bricks:"
+  ],
+  "ci": [
+    ":rocket:",
+    ":green_heart:",
+    ":construction_worker:",
+    ":boom:",
+    ":bricks:"
+  ],
+  "revert": [
+    ":rewind:",
+    ":boom:"
   ]
 }

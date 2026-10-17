@@ -11,7 +11,7 @@ import (
 	"github.com/Snah-s/cmt/internal/catalog"
 )
 
-var Types = []string{"feat", "fix", "docs", "refactor", "test", "chore"}
+var Types = catalog.CommitTypes
 
 type Draft struct {
 	Mode, Type, Emoji, Scope, Description, Body string
@@ -64,7 +64,7 @@ func (d Draft) ValidateFields(c catalog.Catalog, complete bool) error {
 	switch d.Mode {
 	case "standard", "hybrid":
 		if (complete || d.Type != "") && !slices.Contains(Types, d.Type) {
-			return errors.New("--type: choose feat, fix, docs, refactor, test, or chore")
+			return errors.New("--type: choose " + strings.Join(Types, ", "))
 		}
 	case "emoji":
 		if d.Type != "" {

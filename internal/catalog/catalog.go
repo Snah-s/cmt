@@ -27,6 +27,9 @@ const maxCatalogBytes = 1 << 20
 
 var identifier = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 
+// CommitTypes is the conventional profile: the 11 types of @commitlint/config-conventional, most used first.
+var CommitTypes = []string{"feat", "fix", "docs", "refactor", "test", "chore", "perf", "style", "build", "ci", "revert"}
+
 type Emoji struct {
 	Code        string `json:"code"`
 	Emoji       string `json:"emoji"`
@@ -105,11 +108,10 @@ func decode(data []byte) (Catalog, error) {
 }
 
 func (c Catalog) validateTypes() error {
-	types := []string{"feat", "fix", "docs", "refactor", "test", "chore"}
-	if len(c.Types) != len(types) {
-		return fmt.Errorf("classification must contain exactly six commit types")
+	if len(c.Types) != len(CommitTypes) {
+		return fmt.Errorf("classification must contain exactly the %d commit types", len(CommitTypes))
 	}
-	for _, kind := range types {
+	for _, kind := range CommitTypes {
 		if len(c.Types[kind]) == 0 {
 			return fmt.Errorf("classification for %s is empty", kind)
 		}

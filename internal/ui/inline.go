@@ -195,7 +195,10 @@ func (m *inlineSelectorModel) configure(step string) {
 	case "format":
 		title, options, value = "Choose a format", huh.NewOptions("standard", "emoji", "hybrid"), &m.owner.draft.Mode
 	case "type":
-		title, options, value = "Choose a commit type", huh.NewOptions(commit.Types...), &m.owner.draft.Type
+		title, value = "Choose a commit type", &m.owner.draft.Type
+		for _, kind := range commit.Types {
+			options = append(options, huh.NewOption(fmt.Sprintf("%-8s  %s", kind, typeDescriptions[kind]), kind))
+		}
 	case "scope":
 		title, value = "Choose a scope (optional)", &m.owner.draft.Scope
 		options = append(options, huh.NewOption("Skip scope", ""))
@@ -235,6 +238,21 @@ func (m *inlineSelectorModel) choose() tea.Cmd {
 		return m.form.Init()
 	}
 	return nil
+}
+
+// typeDescriptions follow @commitlint/config-conventional; style means code formatting, not CSS.
+var typeDescriptions = map[string]string{
+	"feat":     "A new feature",
+	"fix":      "A bug fix",
+	"docs":     "Documentation only changes",
+	"refactor": "Code change that neither fixes a bug nor adds a feature",
+	"test":     "Adding or correcting tests",
+	"chore":    "Other changes that don't touch source or tests",
+	"perf":     "A code change that improves performance",
+	"style":    "Formatting only, no change in meaning",
+	"build":    "Build system or external dependencies",
+	"ci":       "CI configuration and scripts",
+	"revert":   "Reverts a previous commit",
 }
 
 // charmTheme caches both variants: Huh otherwise rebuilds the theme for each option on every render.
