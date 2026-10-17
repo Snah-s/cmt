@@ -25,7 +25,12 @@ requested; normal use is offline. Run `cmt --help` for commands and flags.
 another mode, `--title` for the description, `--scope` for an optional scope,
 and `--message` for the body. Types are `feat`, `fix`, `docs`, `refactor`, `test`
 and `chore`. In a terminal, review the prompts and confirm before committing.
-The body prompt accepts one optional line; leaving it empty omits the body.
+
+Type directly in the emoji selector to search names, codes and descriptions.
+Exact matches come first; abbreviations and simple typos also match. Use ↑/↓
+to scroll the circular list, Enter to select, and Esc to clear search or cancel.
+The body prompt accepts one optional line; leaving it empty keeps any body received
+from flags or the hook, including trailers such as `Signed-off-by`.
 Without a terminal, complete arguments authorize the commit directly.
 Only changes already staged with `git add` are committed, including partial
 selections. cmt never stages untracked files or unstaged changes. The retired
