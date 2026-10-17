@@ -74,11 +74,7 @@ func (m *commitForm) scopeChoices() []string {
 }
 
 func (m *commitForm) previewStatus() string {
-	count := m.message().TitleLength
-	if count > 72 {
-		return fmt.Sprintf("Preview · %d/72 · warning: long title", count)
-	}
-	return fmt.Sprintf("Preview · %d/72 Unicode code points", count)
+	return "Preview · " + titleCounter(m.message().TitleLength)
 }
 
 func Run(ctx context.Context, input io.Reader, output io.Writer, c catalog.Catalog, draft Draft, options Options) (Draft, error) {
@@ -98,16 +94,9 @@ func reconcile(d *Draft, c catalog.Catalog) {
 func (m *commitForm) textFields(r *lineReader, output io.Writer) error {
 	run := func(field huh.Field) error { return accessibleField(r, output, field) }
 	if !m.options.HideScope && m.options.Scopes == nil {
-		if err := run(huh.NewInput().Title("Scope (optional)").Value(&m.draft.Scope).Validate(commit.ValidateScope)); err != nil {
-			return err
-		}
+		return run(huh.NewInput().Title("Scope (optional)").Value(&m.draft.Scope).Validate(commit.ValidateScope))
 	}
-	return run(huh.NewInput().Title("Enter the commit title").Value(&m.draft.Description).Validate(func(v string) error {
-		if v == "" {
-			v = m.draft.Description
-		}
-		return commit.ValidateDescription(v)
-	}))
+	return nil
 }
 
 func (m *commitForm) confirmFields(r *lineReader, output io.Writer) error {

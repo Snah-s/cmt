@@ -90,3 +90,21 @@ func TestBodyPromptOpensEditor(t *testing.T) {
 		t.Fatalf("without an editor Ctrl+O must do nothing and Esc must cancel: %+v", plain)
 	}
 }
+
+func TestPromptKeepsLineModeKeys(t *testing.T) {
+	prompt := newBodyModel("")
+	press(prompt, 'x')
+	prompt.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	if prompt.eof {
+		t.Fatal("Ctrl+D with text must edit, not end input")
+	}
+	prompt.Update(tea.KeyPressMsg{Code: 'j', Mod: tea.ModCtrl})
+	if !prompt.done || prompt.input.Value() != "x" {
+		t.Fatalf("Ctrl+J (\\n) must submit like Enter: done=%v value=%q", prompt.done, prompt.input.Value())
+	}
+	empty := newBodyModel("")
+	empty.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	if !empty.eof || empty.done {
+		t.Fatal("Ctrl+D on an empty prompt must end input")
+	}
+}

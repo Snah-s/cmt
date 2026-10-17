@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/Snah-s/cmt/internal/catalog"
@@ -25,6 +26,13 @@ type Options struct {
 }
 
 func DefaultOptions() Options { return Options{EmojiFormat: "emoji", CapitalizeTitle: true} }
+
+// Titles longer than SoftTitleLength get a warning; MaxTitleLength is the hard limit of
+// @commitlint/config-conventional, so a message built here never fails it for length.
+const (
+	SoftTitleLength = 72
+	MaxTitleLength  = 100
+)
 
 type Message struct {
 	Title, Text string
@@ -107,7 +115,11 @@ func Build(d Draft, c catalog.Catalog, options Options) (Message, error) {
 	if options.EmojiFormat != "emoji" && options.EmojiFormat != "code" {
 		return Message{}, errors.New("emojiFormat must be emoji or code")
 	}
-	return Preview(d, c, options), nil
+	message := Preview(d, c, options)
+	if message.TitleLength > MaxTitleLength {
+		return Message{}, fmt.Errorf("title has %d characters; the maximum is %d", message.TitleLength, MaxTitleLength)
+	}
+	return message, nil
 }
 
 // Preview uses the same format as Build while allowing incomplete fields.
@@ -147,8 +159,12 @@ func Preview(d Draft, c catalog.Catalog, options Options) Message {
 	if d.Body != "" {
 		text += "\n\n" + d.Body
 	}
-	count := utf8.RuneCountInString(title)
-	return Message{Title: title, Text: text, TitleLength: count, LongTitle: count > 72}
+	// Count like commitlint (JavaScript string length): emojis such as 🐛 count 2.
+	count := 0
+	for _, r := range title {
+		count += utf16.RuneLen(r)
+	}
+	return Message{Title: title, Text: text, TitleLength: count, LongTitle: count > SoftTitleLength}
 }
 
 // Active removes hidden selections when leaving the form, preserving them while editing.

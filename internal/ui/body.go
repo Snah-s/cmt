@@ -10,8 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"charm.land/huh/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/Snah-s/cmt/internal/commit"
 )
@@ -33,35 +34,102 @@ func FindEditor(preference string) string {
 	return ""
 }
 
-// bodyModel asks for a one-line body; Ctrl+O hands the body to the editor instead.
-type bodyModel struct {
-	field   *huh.Input
-	line    string
-	editor  string
-	edit    bool
-	done    bool
-	aborted bool
-	err     error
+// promptModel reads one line in raw mode, so keys act at once: the counter follows every
+// keystroke and, with an editor, Ctrl+O hands the answer to it. It draws a single
+// "? Title [used/max]: answer" line, like the answers printed after each step.
+type promptModel struct {
+	input    textinput.Model
+	title    string
+	fallback string
+	hint     string
+	count    func(value string) (used, available, total int)
+	validate func(value string) error
+	editor   string
+	edit     bool
+	done     bool
+	aborted  bool
+	eof      bool
+	err      error
 }
 
-func newBodyModel(editor string) *bodyModel {
-	m := &bodyModel{editor: editor}
-	m.field = huh.NewInput().Title("Body (optional)").Value(&m.line)
-	if editor != "" {
-		m.field.Description("Ctrl+O: write it in " + filepath.Base(editor))
-	}
-	m.field.WithTheme(charmTheme())
-	m.field.Focus()
+const (
+	sgrReset  = "\x1b[0m"
+	sgrGreen  = "\x1b[32m"
+	sgrBold   = "\x1b[1m"
+	sgrDim    = "\x1b[2m"
+	sgrYellow = "\x1b[33m"
+	sgrRed    = "\x1b[31m"
+)
+
+func newPrompt(title, fallback string, validate func(string) error) *promptModel {
+	m := &promptModel{title: title, fallback: fallback, validate: validate, input: textinput.New()}
+	m.input.Prompt, m.input.Placeholder = "", fallback
+	// Until the terminal reports its size; with no width textinput shows only one placeholder character.
+	m.input.SetWidth(80)
+	m.input.Focus()
 	return m
 }
 
-func (m *bodyModel) Init() tea.Cmd { return nil }
+// value is the typed line, or the received value when nothing was typed.
+func (m *promptModel) value() string {
+	if m.input.Value() == "" {
+		return m.fallback
+	}
+	return m.input.Value()
+}
 
-func (m *bodyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if press, ok := msg.(tea.KeyPressMsg); ok {
-		switch press.String() {
-		case "enter":
-			if m.err = commit.ValidateBody(m.line); m.err == nil {
+func newBodyModel(editor string) *promptModel {
+	m := newPrompt("Body (optional)", "", commit.ValidateBody)
+	if editor != "" {
+		m.editor, m.hint = editor, "Ctrl+O: write it in "+filepath.Base(editor)
+	}
+	return m
+}
+
+// newTitlePrompt counts the whole title as it will be written, so the limit holds before Enter.
+func (m *commitForm) newTitlePrompt() *promptModel {
+	draft := func(description string) commit.Draft {
+		d := m.draft.Active()
+		d.Description = description
+		return d
+	}
+	prompt := newPrompt("Enter the commit title", m.draft.Description, func(value string) error {
+		_, err := commit.Build(draft(value), m.catalog, m.options.MessageOptions)
+		return err
+	})
+	prefix := commit.Preview(draft(""), m.catalog, m.options.MessageOptions).TitleLength
+	prompt.count = func(value string) (int, int, int) {
+		total := commit.Preview(draft(value), m.catalog, m.options.MessageOptions).TitleLength
+		return total - prefix, commit.MaxTitleLength - prefix, total
+	}
+	return prompt
+}
+
+// titleCounter shows used/maximum characters of the whole title, counted as commitlint does.
+func titleCounter(count int) string {
+	text := fmt.Sprintf("%d/%d characters", count, commit.MaxTitleLength)
+	switch {
+	case count > commit.MaxTitleLength:
+		text += " · too long"
+	case count > commit.SoftTitleLength:
+		text += fmt.Sprintf(" · over %d, consider shortening", commit.SoftTitleLength)
+	}
+	return text
+}
+
+func (m *promptModel) Init() tea.Cmd { return tea.RequestWindowSize }
+
+func (m *promptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// Scroll the answer inside the line instead of wrapping it.
+		m.input.SetWidth(max(10, msg.Width-ansi.StringWidth(m.head())-1))
+		return m, nil
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		// Line-mode prompts accepted \n and Ctrl+D as EOF; raw mode keeps both for scripts and habit.
+		case "enter", "ctrl+j":
+			if m.err = m.validate(m.value()); m.err == nil {
 				m.done = true
 				return m, tea.Quit
 			}
@@ -75,32 +143,76 @@ func (m *bodyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc", "ctrl+c":
 			m.aborted = true
 			return m, tea.Quit
+		case "ctrl+d":
+			if m.input.Value() == "" {
+				m.eof = true
+				return m, tea.Quit
+			}
 		}
 	}
-	_, cmd := m.field.Update(msg)
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
 	return m, cmd
 }
 
-func (m *bodyModel) View() tea.View {
-	if m.done || m.edit || m.aborted {
+// head is "? Title [used/max]: " with the counter yellow past the soft limit and red past the maximum.
+func (m *promptModel) head() string {
+	head := sgrGreen + "?" + sgrReset + " " + sgrBold + m.title
+	if m.count != nil {
+		used, available, total := m.count(m.value())
+		color := ""
+		switch {
+		case total > commit.MaxTitleLength:
+			color = sgrRed
+		case total > commit.SoftTitleLength:
+			color = sgrYellow
+		}
+		head += fmt.Sprintf(" %s[%d/%d]%s%s", color, used, available, sgrReset, sgrBold)
+	}
+	return head + ":" + sgrReset + " "
+}
+
+func (m *promptModel) View() tea.View {
+	if m.done || m.edit || m.aborted || m.eof {
 		return tea.NewView("")
 	}
-	content := m.field.View()
+	content := m.head() + m.input.View()
+	if m.hint != "" {
+		content += "\n  " + sgrDim + m.hint + sgrReset
+	}
 	if m.err != nil {
-		content += "\n" + m.err.Error()
+		content += "\n" + sgrRed + m.err.Error() + sgrReset
 	}
 	return tea.NewView(content)
+}
+
+// runPrompt runs one prompt on the terminal; Esc, Ctrl+C or a signal cancel the whole message.
+func runPrompt(ctx context.Context, prompt *promptModel, input io.Reader, output io.Writer) error {
+	err := runProgram(ctx, prompt, input, output)
+	if ctx.Err() != nil || errors.Is(err, tea.ErrInterrupted) || prompt.aborted {
+		return ErrCanceled
+	}
+	if err == nil && prompt.eof {
+		return io.EOF
+	}
+	return err
+}
+
+func (m *commitForm) titleField(ctx context.Context, input io.Reader, output io.Writer) error {
+	prompt := m.newTitlePrompt()
+	if err := runPrompt(ctx, prompt, input, output); err != nil {
+		return err
+	}
+	m.draft.Description = prompt.value()
+	_, err := fmt.Fprintln(output, "? Enter the commit title: "+m.draft.Description)
+	return err
 }
 
 // bodyField repeats the body prompt until a line is accepted or the editor saves a valid body.
 func (m *commitForm) bodyField(ctx context.Context, input io.Reader, output io.Writer) error {
 	for {
 		prompt := newBodyModel(m.options.Editor)
-		err := runProgram(ctx, prompt, input, output)
-		if ctx.Err() != nil || errors.Is(err, tea.ErrInterrupted) || prompt.aborted {
-			return ErrCanceled
-		}
-		if err != nil {
+		if err := runPrompt(ctx, prompt, input, output); err != nil {
 			return err
 		}
 		if done, err := m.applyBody(prompt, input, output); done || err != nil {
@@ -110,13 +222,13 @@ func (m *commitForm) bodyField(ctx context.Context, input io.Reader, output io.W
 }
 
 // applyBody records the prompt's answer; a failed edit keeps the body and reports false to ask again.
-func (m *commitForm) applyBody(prompt *bodyModel, input io.Reader, output io.Writer) (bool, error) {
+func (m *commitForm) applyBody(prompt *promptModel, input io.Reader, output io.Writer) (bool, error) {
 	if !prompt.edit {
 		// An empty line keeps a received body and its trailers.
-		if prompt.line != "" {
-			m.draft.Body = prompt.line
+		if prompt.input.Value() != "" {
+			m.draft.Body = prompt.input.Value()
 		}
-		_, err := fmt.Fprintln(output, "? Body (optional): "+prompt.line)
+		_, err := fmt.Fprintln(output, "? Body (optional): "+prompt.input.Value())
 		return true, err
 	}
 	body, err := editBody(m.options.Editor, m.draft.Body, input, output)

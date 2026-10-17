@@ -43,8 +43,8 @@ func press(model tea.Model, keys ...rune) {
 	}
 }
 
-// fill drives the selectors with keys, the text prompts with lines and, unless hidden, types body.
-func fill(t *testing.T, m *commitForm, lines, body string, keys ...rune) (Draft, string, error) {
+// fill drives the selectors with keys, the scope and confirmation with lines, and types title and body.
+func fill(t *testing.T, m *commitForm, lines, title, body string, keys ...rune) (Draft, string, error) {
 	t.Helper()
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
 	press(selector, keys...)
@@ -57,6 +57,12 @@ func fill(t *testing.T, m *commitForm, lines, body string, keys ...rune) (Draft,
 	if err := m.textFields(r, &output); err != nil {
 		return Draft{}, output.String(), err
 	}
+	prompt := m.newTitlePrompt()
+	press(prompt, append([]rune(title), tea.KeyEnter)...)
+	if !prompt.done {
+		t.Fatalf("title prompt rejected %q: %v", prompt.value(), prompt.err)
+	}
+	m.draft.Description = prompt.value()
 	if !m.options.HideBody {
 		prompt := newBodyModel(m.options.Editor)
 		press(prompt, append([]rune(body), tea.KeyEnter)...)
@@ -72,24 +78,24 @@ func TestPreferencePromptsAndPreview(t *testing.T) {
 	c := testCatalog(t)
 	original := Draft{Mode: "hybrid", Type: "docs", Emoji: ":memo:", Scope: "api", Description: "update README", Body: "  original\n\nSigned-off-by: Ana\n"}
 	opts := Options{FormatExplicit: true, HideScope: true, HideBody: true, MessageOptions: commit.Options{EmojiFormat: "code"}}
-	d, output, err := fill(t, newCommitForm(c, original, opts), "\ny\n", "", tea.KeyEnter, tea.KeyEnter)
+	d, output, err := fill(t, newCommitForm(c, original, opts), "y\n", "", "", tea.KeyEnter, tea.KeyEnter)
 	if err != nil || d != original || !strings.Contains(output, "docs(api): :memo: update README") || strings.Contains(output, "Scope (") || strings.Contains(output, "Body (optional)") {
 		t.Fatalf("hidden prompts/preview: %+v %v / %q", d, err, output)
 	}
 	opts.HideScope = false
 	opts.Scopes = []string{"api", "cli"}
-	d, _, err = fill(t, newCommitForm(c, original, opts), "\ny\n", "", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
+	d, _, err = fill(t, newCommitForm(c, original, opts), "y\n", "", "", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
 	if err != nil || d.Scope != "" || d.Body != original.Body {
 		t.Fatalf("optional configured scope: %+v %v", d, err)
 	}
 	opts.Scopes = []string{}
-	d, output, err = fill(t, newCommitForm(c, original, opts), "\ny\n", "", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
+	d, output, err = fill(t, newCommitForm(c, original, opts), "y\n", "", "", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
 	if err != nil || d.Scope != "" || !strings.Contains(output, "Skip scope") || strings.Contains(output, "Scope (optional)") {
 		t.Fatalf("empty configured scope list accepted a new scope: %+v %v / %q", d, err, output)
 	}
 	opts.MessageOptions = commit.Options{EmojiFormat: "code", CapitalizeTitle: false}
 	opts.HideScope = true
-	d, output, err = fill(t, newCommitForm(c, Draft{Mode: "emoji", Emoji: ":memo:", Description: "update README"}, opts), "\ny\n", "", tea.KeyEnter)
+	d, output, err = fill(t, newCommitForm(c, Draft{Mode: "emoji", Emoji: ":memo:", Description: "update README"}, opts), "y\n", "", "", tea.KeyEnter)
 	if err != nil || d.Description != "update README" || !strings.Contains(output, ":memo: update README") {
 		t.Fatalf("preview differs from preferences: %+v %v / %q", d, err, output)
 	}
@@ -169,7 +175,7 @@ func TestSmallTerminalAndUnicodeCounter(t *testing.T) {
 	if got := utf8.RuneCountInString(m.message().Title); got != 86 {
 		t.Fatalf("counter: %d", got)
 	}
-	if selector.View().AltScreen || !strings.Contains(m.previewStatus(), "86/72") {
+	if selector.View().AltScreen || !strings.Contains(m.previewStatus(), "86/100") {
 		t.Fatalf("alternate screen or incorrect counter: %q", view)
 	}
 	if got := len(strings.Split(view, "\n")); got > 15 {
@@ -194,14 +200,14 @@ func TestModesAndTextEOF(t *testing.T) {
 				keys = append(append(keys, []rune(":memo:")...), tea.KeyEnter)
 			}
 			m := newCommitForm(c, Draft{}, Options{})
-			d, output, err := fill(t, m, "\nupdate guide\ny\n", "first paragraph", keys...)
+			d, output, err := fill(t, m, "\ny\n", "update guide", "first paragraph", keys...)
 			if err != nil || d.Mode != mode || d.Body != "first paragraph" || !strings.Contains(output, m.message().Text) ||
 				(mode != "emoji" && d.Type != "docs") || (mode != "standard" && d.Emoji != ":memo:") {
 				t.Fatalf("mode answers: %+v %v / %q", d, err, output)
 			}
 		})
 	}
-	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("\n")}, io.Discard); !errors.Is(err, io.EOF) {
+	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("")}, io.Discard); !errors.Is(err, io.EOF) {
 		t.Fatalf("text EOF: %v", err)
 	}
 	if err := newCommitForm(c, Draft{Description: "update guide"}, Options{}).confirmFields(&lineReader{reader: strings.NewReader("n\n")}, io.Discard); !errors.Is(err, ErrCanceled) {
@@ -292,7 +298,7 @@ func TestConfirmationDescription(t *testing.T) {
 	const description = "Creates a Git commit from the index."
 	m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Description: "update guide"}, Options{HideScope: true, HideBody: true, ConfirmDescription: description})
 	var output bytes.Buffer
-	r := &lineReader{reader: strings.NewReader("\ny\n")}
+	r := &lineReader{reader: strings.NewReader("y\n")}
 	if err := m.textFields(r, &output); err != nil {
 		t.Fatal(err)
 	}
@@ -369,5 +375,33 @@ func TestBreakingToggleInTypeSelector(t *testing.T) {
 	press(selector, '!', '!', tea.KeyEnter)
 	if !selector.done || owner.draft.Type != "fix" || !owner.draft.Breaking || selector.answers[0] != "? Choose a commit type: fix! (breaking change)" {
 		t.Fatalf("breaking type: %+v %q", owner.draft, selector.answers)
+	}
+}
+
+func TestTitleCounterAndLimit(t *testing.T) {
+	c := testCatalog(t)
+	m := newCommitForm(c, Draft{Mode: "hybrid", Type: "fix", Emoji: ":bug:", Description: "keep"}, Options{FormatExplicit: true})
+	prompt := m.newTitlePrompt()
+	// "fix: 🐛 " takes 8 of 100 (🐛 counts 2, as in commitlint), leaving 92 for the description.
+	if view := strings.TrimRight(ansi.Strip(prompt.View().Content), " "); view != "? Enter the commit title [4/92]: keep" {
+		t.Fatalf("counter for the received title: %q", view)
+	}
+	press(prompt, []rune(strings.Repeat("a", 66))...)
+	if view := prompt.View().Content; !strings.Contains(view, sgrYellow+"[66/92]") {
+		t.Fatalf("over 72 the counter must turn yellow: %q", view)
+	}
+	press(prompt, []rune(strings.Repeat("a", 27))...)
+	press(prompt, tea.KeyEnter)
+	if view := prompt.View().Content; prompt.done || prompt.err == nil || !strings.Contains(view, sgrRed+"[93/92]") {
+		t.Fatalf("accepted a 101-character title: %v %q", prompt.err, view)
+	}
+	press(prompt, tea.KeyBackspace, tea.KeyEnter)
+	if !prompt.done || len(prompt.value()) != 92 {
+		t.Fatalf("rejected a 100-character title: %v", prompt.err)
+	}
+	empty := m.newTitlePrompt()
+	press(empty, tea.KeyEnter)
+	if !empty.done || empty.value() != "keep" {
+		t.Fatalf("Enter without typing must keep the received title: %q %v", empty.value(), empty.err)
 	}
 }

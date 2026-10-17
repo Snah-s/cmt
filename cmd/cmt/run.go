@@ -220,7 +220,7 @@ func run(ctx context.Context, args []string) int {
 		return 2
 	}
 	if message.LongTitle {
-		fmt.Fprintf(os.Stderr, "warning: title has %d Unicode code points; recommended length is 72\n", message.TitleLength)
+		fmt.Fprintf(os.Stderr, "warning: title has %d characters; recommended length is %d\n", message.TitleLength, commit.SoftTitleLength)
 	}
 	if o.Prototype {
 		return writeText(message.Text)

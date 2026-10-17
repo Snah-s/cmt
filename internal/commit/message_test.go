@@ -162,3 +162,20 @@ func TestBreakingChange(t *testing.T) {
 		t.Fatalf("emoji mode kept hidden type fields: %+v", d)
 	}
 }
+
+func TestTitleLengthLimit(t *testing.T) {
+	c, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m, err := Build(Draft{Mode: "standard", Type: "feat", Description: strings.Repeat("a", 94)}, c, DefaultOptions()); err != nil || m.TitleLength != 100 {
+		t.Fatalf("100 characters must pass: %d, %v", m.TitleLength, err)
+	}
+	if _, err := Build(Draft{Mode: "standard", Type: "feat", Description: strings.Repeat("a", 95)}, c, DefaultOptions()); err == nil || !strings.Contains(err.Error(), "101 characters") {
+		t.Fatalf("101 characters must fail: %v", err)
+	}
+	// commitlint counts UTF-16 units: 🐛 is 2, so "fix: 🐛 " is 8.
+	if m := Preview(Draft{Mode: "hybrid", Type: "fix", Emoji: ":bug:", Description: "x"}, c, DefaultOptions()); m.TitleLength != 9 {
+		t.Fatalf("UTF-16 count: %d", m.TitleLength)
+	}
+}

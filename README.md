@@ -27,6 +27,10 @@ and `--message` for the body. Types are the 11 of Conventional Commits tooling:
 `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `style`, `build`, `ci`
 and `revert`. Mark a breaking change with `--breaking`, or press `!` in the type
 selector: `feat(api)!: …`. Explain it with a `BREAKING CHANGE:` footer in the body.
+The title prompt shows a live counter, `? Enter the commit title [18/92]: …`:
+characters used by the description and those left before the 100-character title
+limit. The whole title is counted as commitlint does (an emoji such as 🐛 counts 2):
+the counter turns yellow over 72 and red over 100, which is rejected.
 In a terminal, review the prompts and confirm before committing.
 
 Type directly in the emoji selector to search names, codes and descriptions.

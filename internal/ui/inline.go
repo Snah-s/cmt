@@ -302,7 +302,10 @@ func (m *commitForm) inlineFields(ctx context.Context, input io.Reader, output i
 	}); err != nil {
 		return err
 	}
-	// The body prompt reads keys in raw mode so Ctrl+O can open the editor.
+	// The title and body prompts read keys in raw mode: a live counter and Ctrl+O need them.
+	if err := m.titleField(ctx, input, output); err != nil {
+		return err
+	}
 	if !m.options.HideBody {
 		if err := m.bodyField(ctx, input, output); err != nil {
 			return err

@@ -77,7 +77,7 @@ func TestCLIWithoutTTY(t *testing.T) {
 			if code != test.code || out.String() != test.message {
 				t.Fatalf("exit %d, stdout %q, stderr %q", code, out.String(), stderr.String())
 			}
-			if len(test.args) > 2 && strings.Contains(test.args[len(test.args)-1], strings.Repeat("á", 67)) && !strings.Contains(stderr.String(), "73 Unicode code points") {
+			if len(test.args) > 2 && strings.Contains(test.args[len(test.args)-1], strings.Repeat("á", 67)) && !strings.Contains(stderr.String(), "73 characters") {
 				t.Fatalf("missing warning: %q", stderr.String())
 			}
 		})
