@@ -12,15 +12,15 @@ import (
 )
 
 type Options struct {
-	Command, HookFile, HookSource, HookObject string
-	Queries                                   []string
-	Draft                                     commit.Draft
-	Help, Version, Accessible, Prototype      bool
-	FormatSet, TypeSet, EmojiSet              bool
-	TitleSet, ScopeSet, BodySet               bool
-	ConfigSet                                 []string
-	ImportFile                                string
-	ImportSet, Show                           bool
+	Command, HookFile, HookSource        string
+	Queries                              []string
+	Draft                                commit.Draft
+	Help, Version, Accessible, Prototype bool
+	FormatSet, TypeSet, EmojiSet         bool
+	TitleSet, ScopeSet, BodySet          bool
+	ConfigSet                            []string
+	ImportFile                           string
+	ImportSet, Show                      bool
 }
 
 var actions = map[string]string{
@@ -169,11 +169,9 @@ func Parse(args []string) (Options, error) {
 		if o.HookFile == "" || strings.IndexByte(o.HookFile, 0) >= 0 || len(positional) > 2 {
 			return o, errors.New("usage: hook file [source [object]]")
 		}
+		// Git also passes the object for commit sources; those are skipped, so only the source matters.
 		if len(positional) > 0 {
 			o.HookSource = positional[0]
-		}
-		if len(positional) > 1 {
-			o.HookObject = positional[1]
 		}
 	default:
 		if len(positional) > 0 {

@@ -3,6 +3,8 @@ package commit
 import (
 	"strings"
 	"testing"
+
+	"github.com/Snah-s/cmt/internal/catalog"
 )
 
 func TestHookAnnotations(t *testing.T) {
@@ -27,6 +29,10 @@ func TestHookAnnotations(t *testing.T) {
 	p = SplitHook(text, ";", "")
 	if !strings.Contains(p.Trailing, "+ diff content") || strings.Contains(p.Text, ">8") || p.WithMessage(p.Text) != text {
 		t.Fatalf("scissors lost: %+v", p)
+	}
+	p = SplitHook("\n\nSigned-off-by: Ana\n\n# status\n", "#", "")
+	if d, err := Parse(p.Text, catalog.Catalog{}); err != nil || d.Description != "" || d.Body != "Signed-off-by: Ana\n" || p.Trailing != "\n# status\n" {
+		t.Fatalf("sign-off became the title: %+v / %+v / %v", p, d, err)
 	}
 	p = SplitHook("raw title\n\nbody\n\n; status\n", "auto", "template")
 	if p.Trailing != "\n; status\n" || p.Text != "raw title\n\nbody\n" {

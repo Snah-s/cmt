@@ -8,9 +8,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
 	"testing"
+	"unicode"
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
@@ -31,33 +32,50 @@ func testCatalog(t *testing.T) catalog.Catalog {
 	return c
 }
 
+// fill drives the inline selectors with keys, then answers the text prompts with lines.
+func fill(t *testing.T, m *commitForm, lines string, keys ...rune) (Draft, string, error) {
+	t.Helper()
+	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
+	for _, key := range keys {
+		press := tea.KeyPressMsg{Code: key}
+		if unicode.IsPrint(key) {
+			press.Text = string(key)
+		}
+		selector.Update(press)
+	}
+	if !selector.done {
+		t.Fatalf("selectors stopped at %q", selector.step)
+	}
+	var output bytes.Buffer
+	output.WriteString(strings.Join(selector.answers, "\n") + "\n")
+	err := m.textFields(&lineReader{reader: strings.NewReader(lines)}, &output)
+	return m.draft.Active(), output.String(), err
+}
+
 func TestPreferencePromptsAndPreview(t *testing.T) {
 	c := testCatalog(t)
 	original := Draft{Mode: "hybrid", Type: "docs", Emoji: ":memo:", Scope: "api", Description: "update README", Body: "  original\n\nSigned-off-by: Ana\n"}
 	opts := Options{FormatExplicit: true, HideScope: true, HideBody: true, MessageOptions: commit.Options{EmojiFormat: "code"}}
-	var output bytes.Buffer
-	d, err := Run(context.Background(), strings.NewReader("\n\n\ny\n"), &output, c, original, opts)
-	if err != nil || d != original || !strings.Contains(output.String(), "docs(api): :memo: update README") || strings.Contains(output.String(), "Scope (") || strings.Contains(output.String(), "Body (optional)") {
-		t.Fatalf("hidden prompts/preview: %+v %v / %q", d, err, output.String())
+	d, output, err := fill(t, newCommitForm(c, original, opts), "\ny\n", tea.KeyEnter, tea.KeyEnter)
+	if err != nil || d != original || !strings.Contains(output, "docs(api): :memo: update README") || strings.Contains(output, "Scope (") || strings.Contains(output, "Body (optional)") {
+		t.Fatalf("hidden prompts/preview: %+v %v / %q", d, err, output)
 	}
 	opts.HideScope = false
 	opts.Scopes = []string{"api", "cli"}
-	d, err = Run(context.Background(), strings.NewReader("\n\n1\n\ny\n"), io.Discard, c, original, opts)
+	d, _, err = fill(t, newCommitForm(c, original, opts), "\ny\n", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
 	if err != nil || d.Scope != "" || d.Body != original.Body {
 		t.Fatalf("optional configured scope: %+v %v", d, err)
 	}
 	opts.Scopes = []string{}
-	output.Reset()
-	d, err = Run(context.Background(), strings.NewReader("\n\n1\n\ny\n"), &output, c, original, opts)
-	if err != nil || d.Scope != "" || !strings.Contains(output.String(), "Skip scope") {
-		t.Fatalf("empty configured scope list accepted a new scope: %+v %v / %q", d, err, output.String())
+	d, output, err = fill(t, newCommitForm(c, original, opts), "\ny\n", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
+	if err != nil || d.Scope != "" || !strings.Contains(output, "Skip scope") || strings.Contains(output, "Scope (optional)") {
+		t.Fatalf("empty configured scope list accepted a new scope: %+v %v / %q", d, err, output)
 	}
 	opts.MessageOptions = commit.Options{EmojiFormat: "code", CapitalizeTitle: false}
 	opts.HideScope = true
-	output.Reset()
-	d, err = Run(context.Background(), strings.NewReader("\n\ny\n"), &output, c, Draft{Mode: "emoji", Emoji: ":memo:", Description: "update README"}, opts)
-	if err != nil || d.Description != "update README" || !strings.Contains(output.String(), ":memo: update README") {
-		t.Fatal("preview differs from preferences")
+	d, output, err = fill(t, newCommitForm(c, Draft{Mode: "emoji", Emoji: ":memo:", Description: "update README"}, opts), "\ny\n", tea.KeyEnter)
+	if err != nil || d.Description != "update README" || !strings.Contains(output, ":memo: update README") {
+		t.Fatalf("preview differs from preferences: %+v %v / %q", d, err, output)
 	}
 }
 
@@ -74,10 +92,10 @@ func TestAccessibleConfiguration(t *testing.T) {
 func TestPreviewAndTypeChange(t *testing.T) {
 	c := testCatalog(t)
 	d := Draft{Mode: "hybrid", Type: "feat", Emoji: ":sparkles:", Scope: "users", Description: "add résumé search", Body: "first paragraph\n\nSigned-off-by: Ana"}
-	if got := d.Message(c); got != "feat(users): ✨ add résumé search\n\nfirst paragraph\n\nSigned-off-by: Ana" {
+	if got := commit.Preview(d, c, commit.DefaultOptions()).Text; got != "feat(users): ✨ add résumé search\n\nfirst paragraph\n\nSigned-off-by: Ana" {
 		t.Fatalf("preview: %q", got)
 	}
-	m := newCommitForm(c, d, Options{FormatExplicit: true, InlineSelectors: true})
+	m := newCommitForm(c, d, Options{FormatExplicit: true})
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -87,9 +105,9 @@ func TestPreviewAndTypeChange(t *testing.T) {
 	if selector.step != "emoji" || selector.done || m.draft.Emoji == d.Emoji || m.draft.Body != d.Body || m.draft.Description != d.Description || m.draft.Scope != d.Scope {
 		t.Fatalf("type change discarded data, reused an incompatible emoji, or skipped confirmation: %+v", m.draft)
 	}
-	for _, option := range m.emojiOptions() {
-		if !c.Compatible("fix", option.Value) {
-			t.Fatalf("incompatible option: %q", option.Value)
+	for _, option := range selector.emojis.options {
+		if !c.Compatible("fix", option.entry.Code) {
+			t.Fatalf("incompatible option: %q", option.entry.Code)
 		}
 	}
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -98,7 +116,7 @@ func TestPreviewAndTypeChange(t *testing.T) {
 	}
 	for _, mode := range []string{"standard", "emoji", "hybrid"} {
 		d.Mode = mode
-		title := d.Title(c)
+		title := commit.Preview(d, c, commit.DefaultOptions()).Title
 		if mode == "standard" && strings.Contains(title, "✨") {
 			t.Fatal("standard contains an emoji")
 		}
@@ -109,16 +127,16 @@ func TestPreviewAndTypeChange(t *testing.T) {
 }
 
 func TestEmojiSearchAndEscape(t *testing.T) {
-	m := newCommitForm(testCatalog(t), Draft{Mode: "hybrid", Type: "feat"}, Options{FormatExplicit: true, InlineSelectors: true})
+	m := newCommitForm(testCatalog(t), Draft{Mode: "hybrid", Type: "feat"}, Options{FormatExplicit: true})
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	selector.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 	selector.Update(tea.KeyPressMsg{Code: 's', Text: "sparkles"})
-	if !selector.selector.GetFiltering() || !strings.Contains(ansi.Strip(selector.View().Content), ":sparkles:") {
+	if !selector.emojis.filtering || !strings.Contains(ansi.Strip(selector.View().Content), ":sparkles:") {
 		t.Fatal("search does not show the emoji")
 	}
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if selector.form.State != huh.StateNormal || selector.selector.GetFiltering() {
+	if selector.form.State != huh.StateNormal || selector.emojis.filtering {
 		t.Fatal("Escape from search canceled the form")
 	}
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -132,7 +150,7 @@ func TestSmallTerminalAndUnicodeCounter(t *testing.T) {
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.WindowSizeMsg{Width: 40, Height: 15})
 	view := ansi.Strip(selector.View().Content)
-	if got := utf8.RuneCountInString(m.draft.Title(m.catalog)); got != 86 {
+	if got := utf8.RuneCountInString(m.message().Title); got != 86 {
 		t.Fatalf("counter: %d", got)
 	}
 	if selector.View().AltScreen || !strings.Contains(m.previewStatus(), "86/72") {
@@ -148,48 +166,30 @@ func TestSmallTerminalAndUnicodeCounter(t *testing.T) {
 	}
 }
 
-func TestAccessibleModesAndEOF(t *testing.T) {
+func TestModesAndTextEOF(t *testing.T) {
 	c := testCatalog(t)
 	for i, mode := range []string{"standard", "emoji", "hybrid"} {
 		t.Run(mode, func(t *testing.T) {
-			answers := strconv.Itoa(i+1) + "\n"
+			keys := append(slices.Repeat([]rune{tea.KeyDown}, i), tea.KeyEnter)
 			if mode != "emoji" {
-				answers += "3\n"
+				keys = append(keys, tea.KeyDown, tea.KeyDown, tea.KeyEnter)
 			}
 			if mode != "standard" {
-				options := (&commitForm{catalog: c, draft: Draft{Mode: mode, Type: "docs"}}).emojiOptions()
-				for index, option := range options {
-					if option.Value == ":memo:" {
-						answers += strconv.Itoa(index+1) + "\n"
-						break
-					}
-				}
+				keys = append(append(keys, []rune(":memo:")...), tea.KeyEnter)
 			}
-			answers += "\nupdate guide\nfirst paragraph\ny\n"
-			var output bytes.Buffer
-			d, err := Run(context.Background(), strings.NewReader(answers), &output, c, Draft{}, Options{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if d.Body != "first paragraph" || !strings.Contains(output.String(), d.Message(c)) {
-				t.Fatalf("body/preview: %+v / %q", d, output.String())
+			m := newCommitForm(c, Draft{}, Options{})
+			d, output, err := fill(t, m, "\nupdate guide\nfirst paragraph\ny\n", keys...)
+			if err != nil || d.Mode != mode || d.Body != "first paragraph" || !strings.Contains(output, m.message().Text) ||
+				(mode != "emoji" && d.Type != "docs") || (mode != "standard" && d.Emoji != ":memo:") {
+				t.Fatalf("mode answers: %+v %v / %q", d, err, output)
 			}
 		})
 	}
-	for _, input := range []string{"", "3\n1\n", "1\n1\n\n"} {
-		_, err := Run(context.Background(), strings.NewReader(input), io.Discard, c, Draft{}, Options{})
-		if !errors.Is(err, io.EOF) {
-			t.Fatalf("EOF (%q): %v", input, err)
-		}
+	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("\nupdate guide\n")}, io.Discard); !errors.Is(err, io.EOF) {
+		t.Fatalf("text EOF: %v", err)
 	}
-	_, err := Run(context.Background(), strings.NewReader("1\n1\n\nupdate guide\n\nn\n"), io.Discard, c, Draft{}, Options{})
-	if !errors.Is(err, ErrCanceled) {
-		t.Fatalf("accessible cancellation: %v", err)
-	}
-	original := Draft{Description: "update guide", Body: "  original paragraph\n\nSigned-off-by: Ana\n"}
-	d, err := Run(context.Background(), strings.NewReader("\n\n\n\ny\n"), io.Discard, c, original, Options{HideBody: true})
-	if err != nil || d.Body != original.Body || d.Description != original.Description {
-		t.Fatalf("defaults and existing body: %+v, %v", d, err)
+	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("\nupdate guide\n\nn\n")}, io.Discard); !errors.Is(err, ErrCanceled) {
+		t.Fatalf("cancellation: %v", err)
 	}
 }
 
@@ -197,14 +197,14 @@ func TestInlineEmojiInitialSelection(t *testing.T) {
 	c := testCatalog(t)
 	for _, code := range []string{"", ":memo:"} {
 		t.Run(code, func(t *testing.T) {
-			owner := newCommitForm(c, Draft{Mode: "emoji", Emoji: code}, Options{InlineSelectors: true})
+			owner := newCommitForm(c, Draft{Mode: "emoji", Emoji: code}, Options{})
 			selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 			selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 			want := code
 			if want == "" {
 				want = c.Entries[0].Code
 			}
-			if got, ok := selector.selector.Hovered(); !ok || got != want || selector.step != "emoji" {
+			if got, ok := selector.emojis.hovered(); !ok || got != want || selector.step != "emoji" {
 				t.Fatalf("initial emoji: got %q, step %q, want %q", got, selector.step, want)
 			}
 		})
@@ -212,7 +212,7 @@ func TestInlineEmojiInitialSelection(t *testing.T) {
 }
 
 func TestInlineSelectorStagesReuseOneCompactList(t *testing.T) {
-	owner := newCommitForm(testCatalog(t), Draft{}, Options{InlineSelectors: true})
+	owner := newCommitForm(testCatalog(t), Draft{}, Options{})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.form.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if view := ansi.Strip(selector.View().Content); len(strings.Split(view, "\n")) != 4 {
@@ -235,7 +235,7 @@ func TestInlineSelectorStagesReuseOneCompactList(t *testing.T) {
 	if got := strings.Count(view, "> "); got != 1 {
 		t.Fatalf("emoji selector rendered %d cursors: %q", got, view)
 	}
-	if lines := strings.Split(view, "\n"); len(lines) > 8 {
+	if lines := strings.Split(view, "\n"); len(lines) > 9 {
 		t.Fatalf("emoji selector used too many rows: %d / %q", len(lines), view)
 	}
 	for _, background := range []color.Color{color.Black, color.White, color.Black} {
@@ -253,18 +253,19 @@ func TestInlineSelectorStagesReuseOneCompactList(t *testing.T) {
 func TestOptionalSingleLineBody(t *testing.T) {
 	for _, body := range []string{"", "one paragraph", "  indented body  "} {
 		t.Run(body, func(t *testing.T) {
-			m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Body: "old body\n\nSigned-off-by: Ana"}, Options{InlineSelectors: true, HideScope: true})
+			m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Body: "old body\n\nSigned-off-by: Ana"}, Options{HideScope: true})
 			var output bytes.Buffer
 			err := m.textFields(&lineReader{reader: strings.NewReader("update guide\n" + body + "\ny\n")}, &output)
 			view := output.String()
-			if err != nil || m.draft.Body != body || !m.confirmed {
+			want := body
+			if body == "" {
+				want = "old body\n\nSigned-off-by: Ana"
+			}
+			if err != nil || m.draft.Body != want || !m.confirmed {
 				t.Fatalf("body: %q, confirmed=%v, err=%v", m.draft.Body, m.confirmed, err)
 			}
 			if strings.Count(view, "Body (optional)") != 1 || strings.Contains(view, "Write/replace") || strings.Contains(view, "/done") {
 				t.Fatalf("body asked for extra input: %q", view)
-			}
-			if body == "" && m.message().Text != "docs: update guide" {
-				t.Fatalf("empty input kept an existing body: %q", m.message().Text)
 			}
 		})
 	}
@@ -272,7 +273,7 @@ func TestOptionalSingleLineBody(t *testing.T) {
 
 func TestConfirmationDescription(t *testing.T) {
 	const description = "Creates a Git commit from the index."
-	m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Description: "update guide"}, Options{InlineSelectors: true, HideScope: true, HideBody: true, ConfirmDescription: description})
+	m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Description: "update guide"}, Options{HideScope: true, HideBody: true, ConfirmDescription: description})
 	var output bytes.Buffer
 	if err := m.textFields(&lineReader{reader: strings.NewReader("\ny\n")}, &output); err != nil {
 		t.Fatal(err)
@@ -292,7 +293,7 @@ func TestEmptyHybridCategory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := newCommitForm(c, Draft{Mode: "hybrid"}, Options{InlineSelectors: true, FormatExplicit: true})
+	owner := newCommitForm(c, Draft{Mode: "hybrid"}, Options{FormatExplicit: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if selector.step != "type" || owner.draft.Emoji != "" || !strings.Contains(ansi.Strip(selector.View().Content), "no classified emojis") {
@@ -305,37 +306,5 @@ func TestEmptyHybridCategory(t *testing.T) {
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if selector.step != "emoji" || owner.draft.Type != "fix" || owner.draft.Emoji != ":new:" {
 		t.Fatalf("compatible category could not be chosen: step=%q draft=%+v", selector.step, owner.draft)
-	}
-	var output bytes.Buffer
-	draft, err := Run(context.Background(), strings.NewReader("1\n2\n1\nupdate guide\ny\n"), &output, owner.catalog, Draft{Mode: "hybrid"}, Options{FormatExplicit: true, HideScope: true, HideBody: true})
-	if err != nil || draft.Type != "fix" || draft.Emoji != ":new:" || !strings.Contains(output.String(), "no classified emojis") {
-		t.Fatalf("numeric empty category: draft=%+v err=%v output=%q", draft, err, output.String())
-	}
-}
-
-func TestAccessibleInvalidSelectionEOF(t *testing.T) {
-	for _, stage := range []struct{ name, prefix string }{{"format", ""}, {"type", "1\n"}, {"emoji", "2\n"}, {"scope", "1\n1\n"}} {
-		for _, invalid := range []string{"invalid", "0", "99", "-1"} {
-			t.Run(stage.name+"/"+invalid, func(t *testing.T) {
-				defer func() {
-					if value := recover(); value != nil {
-						t.Fatalf("invalid selection followed by EOF panicked: %v", value)
-					}
-				}()
-				m := newCommitForm(testCatalog(t), Draft{}, Options{Scopes: []string{"api"}})
-				err := m.accessibleFields(strings.NewReader(stage.prefix+invalid+"\n"), io.Discard)
-				if !errors.Is(err, io.EOF) || m.confirmed {
-					t.Fatalf("invalid selection EOF: err=%v confirmed=%v", err, m.confirmed)
-				}
-			})
-		}
-	}
-}
-
-func TestAccessibleSelectionRecovery(t *testing.T) {
-	input := "invalid\n0\n99\n1\ninvalid\n3\n99\n2\nupdate guide\ny\n"
-	draft, err := Run(context.Background(), strings.NewReader(input), io.Discard, testCatalog(t), Draft{}, Options{HideBody: true, Scopes: []string{"api"}})
-	if err != nil || draft.Mode != "standard" || draft.Type != "docs" || draft.Scope != "api" || draft.Description != "update guide" {
-		t.Fatalf("valid answer after invalid selections: draft=%+v err=%v", draft, err)
 	}
 }

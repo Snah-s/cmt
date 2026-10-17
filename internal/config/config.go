@@ -120,7 +120,8 @@ func object(data []byte) (map[string]json.RawMessage, error) {
 		return nil, errors.New("JSON must be valid UTF-8 and at most 1 MiB")
 	}
 	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
+	// npm and Windows editors accept a UTF-8 BOM; encoding/json does not.
+	if err := json.Unmarshal(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), &fields); err != nil {
 		return nil, fmt.Errorf("invalid JSON object: %w", err)
 	}
 	if fields == nil {
@@ -175,7 +176,8 @@ func Resolve(cwd string) (Resolved, error) {
 		data, err := readFile(manifest)
 		if err == nil {
 			fields, err := object(data)
-			if err != nil {
+			// A manifest without our key belongs to other tools; only block on one that may configure cmt.
+			if err != nil && bytes.Contains(data, []byte(`"cmt"`)) {
 				return Resolved{}, fmt.Errorf("%s: %w", manifest, err)
 			}
 			if value, ok := fields["cmt"]; ok {
@@ -309,18 +311,4 @@ func Create(path string, p Preferences) error {
 		return err
 	}
 	return storage.CreateFile(path, append(data, '\n'), 0600)
-}
-
-// Import writes a new native profile only after validating the legacy file.
-func Import(source, destination string) (Preferences, error) {
-	if _, err := os.Lstat(destination); err == nil {
-		return Preferences{}, fmt.Errorf("%s: native profile already exists; import will not overwrite it", destination)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return Preferences{}, err
-	}
-	p, err := Read(source, true)
-	if err != nil {
-		return p, err
-	}
-	return p, Create(destination, p)
 }

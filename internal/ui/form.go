@@ -26,11 +26,11 @@ type commitForm struct {
 }
 
 type Options struct {
-	FormatExplicit, InlineSelectors bool
-	HideScope, HideBody             bool
-	Scopes                          []string
-	MessageOptions                  commit.Options
-	ConfirmDescription              string
+	FormatExplicit      bool
+	HideScope, HideBody bool
+	Scopes              []string
+	MessageOptions      commit.Options
+	ConfirmDescription  string
 }
 
 func newCommitForm(c catalog.Catalog, draft Draft, options Options) *commitForm {
@@ -48,16 +48,6 @@ func newCommitForm(c catalog.Catalog, draft Draft, options Options) *commitForm 
 	}
 	reconcile(&draft, c)
 	return &commitForm{draft: draft, catalog: c, fixedMode: options.FormatExplicit, options: options}
-}
-
-func (m *commitForm) emojiOptions() []huh.Option[string] {
-	var options []huh.Option[string]
-	for _, entry := range m.catalog.Entries {
-		if m.draft.Mode != "hybrid" || m.catalog.Compatible(m.draft.Type, entry.Code) {
-			options = append(options, huh.NewOption(entry.Emoji+" "+entry.Code+" "+entry.Description, entry.Code))
-		}
-	}
-	return options
 }
 
 func (m *commitForm) validateType(kind string) error {
@@ -92,13 +82,7 @@ func (m *commitForm) previewStatus() string {
 
 func Run(ctx context.Context, input io.Reader, output io.Writer, c catalog.Catalog, draft Draft, options Options) (Draft, error) {
 	m := newCommitForm(c, draft, options)
-	var err error
-	if options.InlineSelectors {
-		err = m.inlineFields(ctx, input, output)
-	} else {
-		err = runAccessible(ctx, input, func(reader io.Reader) error { return m.accessibleFields(reader, output) })
-	}
-	if err != nil {
+	if err := m.inlineFields(ctx, input, output); err != nil {
 		return Draft{}, err
 	}
 	return m.draft.Active(), nil
@@ -130,8 +114,10 @@ func (m *commitForm) textFields(r *lineReader, output io.Writer) error {
 		if err := run(huh.NewInput().Title("Body (optional)").Value(&body).Validate(commit.ValidateBody)); err != nil {
 			return err
 		}
-		// PromptString trims whitespace; preserve the literal body entered.
-		m.draft.Body = r.lastLine
+		// PromptString trims whitespace; preserve the literal body entered. Empty keeps a received body and its trailers.
+		if r.lastLine != "" {
+			m.draft.Body = r.lastLine
+		}
 	}
 	if err := commit.ValidateBody(m.draft.Body); err != nil {
 		return err

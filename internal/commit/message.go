@@ -143,9 +143,6 @@ func Preview(d Draft, c catalog.Catalog, options Options) Message {
 	return Message{Title: title, Text: text, TitleLength: count, LongTitle: count > 72}
 }
 
-func (d Draft) Title(c catalog.Catalog) string   { return Preview(d, c, DefaultOptions()).Title }
-func (d Draft) Message(c catalog.Catalog) string { return Preview(d, c, DefaultOptions()).Text }
-
 // Active removes hidden selections when leaving the form, preserving them while editing.
 func (d Draft) Active() Draft {
 	if d.Mode == "standard" {

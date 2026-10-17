@@ -46,7 +46,7 @@ func TestPreferencesAndImport(t *testing.T) {
 	if err := os.WriteFile(source, original, 0600); err != nil {
 		t.Fatal(err)
 	}
-	imported, err := Import(source, dest)
+	imported, err := importProfile(source, dest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestPreferencesAndImport(t *testing.T) {
 	if bytes.Contains(before, []byte("gitmojisUrl")) || bytes.Contains(before, []byte("autoAdd")) || !bytes.Contains(before, []byte("catalogUrl")) {
 		t.Fatalf("import saved a retired key: %s", before)
 	}
-	if _, err := Import(source, dest); err == nil {
+	if _, err := importProfile(source, dest); err == nil {
 		t.Fatal("import overwrote existing profile")
 	}
 	after, _ := os.ReadFile(dest)
@@ -137,7 +137,7 @@ func TestPathsAndDefaults(t *testing.T) {
 	if err := os.WriteFile(legacy, original, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if p, err := Import(legacy, path); err != nil || p.CommitFormat != "emoji" || p.EmojiFormat != "code" {
+	if p, err := importProfile(legacy, path); err != nil || p.CommitFormat != "emoji" || p.EmojiFormat != "code" {
 		t.Fatalf("platform import: %+v %v", p, err)
 	}
 	if data, err := os.ReadFile(legacy); err != nil || !bytes.Equal(data, original) {
@@ -211,13 +211,23 @@ func TestProjectPrecedence(t *testing.T) {
 	if err != nil || r.Source != rc {
 		t.Fatalf("manifest without key: %+v %v", r, err)
 	}
+	write(manifest, "\xef\xbb\xbf"+`{"cmt":{"commitFormat":"hybrid"}}`)
+	r, err = Resolve(child)
+	if err != nil || r.Source != manifest || r.Preferences.CommitFormat != "hybrid" {
+		t.Fatalf("manifest with BOM: %+v %v", r, err)
+	}
+	write(manifest, `{"name": broken`)
+	r, err = Resolve(child)
+	if err != nil || r.Source != rc {
+		t.Fatalf("unrelated broken manifest blocked cmt: %+v %v", r, err)
+	}
 	nearest := filepath.Join(child, ".cmtrc.json")
 	write(nearest, `{"autoAdd":false}`)
 	r, err = Resolve(child)
 	if err != nil || r.Source != nearest {
 		t.Fatalf("nearest: %+v %v", r, err)
 	}
-	for _, text := range []string{`{`, `{"cmt":null}`, `{"cmt":{"scopePrompt":17}}`} {
+	for _, text := range []string{`{"cmt":`, `{"cmt":null}`, `{"cmt":{"scopePrompt":17}}`} {
 		path := filepath.Join(child, "package.json")
 		write(path, text)
 		if _, err := Resolve(child); err == nil || !strings.Contains(err.Error(), path) {
@@ -240,4 +250,13 @@ func TestProjectPrecedence(t *testing.T) {
 	if _, err := Resolve(child); err == nil {
 		t.Fatal("unreadable candidate fell back")
 	}
+}
+
+// importProfile follows cmt config --import: validate the legacy file, then create without overwriting.
+func importProfile(source, destination string) (Preferences, error) {
+	p, err := Read(source, true)
+	if err != nil {
+		return p, err
+	}
+	return p, Create(destination, p)
 }

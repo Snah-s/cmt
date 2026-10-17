@@ -54,7 +54,7 @@ func runProgram(ctx context.Context, model tea.Model, input io.Reader, output io
 	}
 	// Graceful quit joins the terminal reader; Bubble Tea's forced shutdown does not.
 	options := []tea.ProgramOption{tea.WithInput(input), tea.WithOutput(output),
-		tea.WithContext(context.WithoutCancel(ctx)), tea.WithoutSignalHandler()}
+		tea.WithContext(context.WithoutCancel(ctx)), tea.WithoutSignalHandler(), tea.WithFPS(30)}
 	var resizeErr error
 	if file, ok := output.(term.File); ok && term.IsTerminal(file.Fd()) {
 		requestType := reflect.TypeOf(tea.RequestWindowSize())

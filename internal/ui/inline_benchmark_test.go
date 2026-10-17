@@ -18,7 +18,7 @@ func BenchmarkInlineSelectorStart(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{InlineSelectors: true, FormatExplicit: true})
+		owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{FormatExplicit: true})
 		selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 		selector.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
 		selector.View()
@@ -30,13 +30,30 @@ func BenchmarkInlineSelectorNavigation(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{InlineSelectors: true, FormatExplicit: true})
+	owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{FormatExplicit: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
 		selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		selector.View()
+	}
+}
+
+func BenchmarkInlineSelectorSearch(b *testing.B) {
+	c, err := catalog.Load()
+	if err != nil {
+		b.Fatal(err)
+	}
+	owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{FormatExplicit: true})
+	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
+	selector.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for b.Loop() {
+		selector.emojis.query = "sprkls"
+		selector.emojis.filter()
 		selector.View()
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/Snah-s/cmt/internal/storage"
@@ -45,6 +46,11 @@ func (r Repo) capture(ctx context.Context, args ...string) (string, error) {
 func (r Repo) run(ctx context.Context, input io.Reader, output, errorOutput io.Writer, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr = r.Dir, input, output, errorOutput
+	if runtime.GOOS != "windows" {
+		// SIGKILL would skip Git's cleanup and leave index.lock; SIGINT lets it remove its locks.
+		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+		cmd.WaitDelay = 5 * time.Second
+	}
 	err := cmd.Run()
 	if err != nil && ctx.Err() != nil {
 		return ctx.Err()

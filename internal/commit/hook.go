@@ -31,6 +31,10 @@ func SplitHook(text, prefix, source string) HookParts {
 		for start < end && (blank(lines[start]) || comment(lines[start])) {
 			start++
 		}
+		// git commit -s leaves the title line empty above the trailer; keep it so the trailer stays body.
+		if start < end && strings.TrimSpace(strings.Join(lines[:start], "")) == "" {
+			start = 0
+		}
 	}
 	for i := start; i < end; i++ {
 		if prefix != "" && strings.TrimRight(lines[i], "\r\n") == prefix+" ------------------------ >8 ------------------------" {

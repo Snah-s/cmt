@@ -41,7 +41,7 @@ func TestArguments(t *testing.T) {
 		t.Fatalf("leading dash/repeated value: %+v %v", o, err)
 	}
 	o, err = Parse([]string{"hook", "/path with spaces/message", "commit", "abc"})
-	if err != nil || o.HookFile != "/path with spaces/message" || o.HookSource != "commit" || o.HookObject != "abc" {
+	if err != nil || o.HookFile != "/path with spaces/message" || o.HookSource != "commit" {
 		t.Fatalf("hook: %+v %v", o, err)
 	}
 	o, err = Parse([]string{"prototype", "--hook", "/path/message", "message"})

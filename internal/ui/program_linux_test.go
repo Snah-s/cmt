@@ -45,7 +45,7 @@ func TestInlineSelectorEOFRestoresTerminal(t *testing.T) {
 	input := &eofTerminal{File: slave, initial: initial}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	_, err = Run(ctx, input, io.Discard, testCatalog(t), Draft{}, Options{InlineSelectors: true})
+	_, err = Run(ctx, input, io.Discard, testCatalog(t), Draft{}, Options{})
 	if !errors.Is(err, io.EOF) || ctx.Err() != nil || !input.raw {
 		t.Fatalf("terminal EOF: err=%v, context=%v, raw=%v", err, ctx.Err(), input.raw)
 	}

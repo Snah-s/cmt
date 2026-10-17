@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func command(t *testing.T, dir string, args ...string) string {
@@ -313,6 +314,37 @@ func TestWindowsManagedHookGuard(t *testing.T) {
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != legacyHook {
 		t.Fatal("rejected installation changed the legacy hook")
+	}
+}
+
+func TestCanceledCommitLetsGitCleanUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("cancellation keeps the default kill on Windows")
+	}
+	r := testRepo(t)
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A git stand-in for commit only: it records whether it got the chance to run its signal cleanup.
+	bin := t.TempDir()
+	started, cleaned := filepath.Join(bin, "started"), filepath.Join(bin, "cleaned")
+	write(t, filepath.Join(bin, "git"), "#!/bin/sh\nif [ \"$1\" = commit ]; then\n  trap \": > '"+cleaned+"'; exit 130\" INT\n  : > '"+started+"'\n  while :; do sleep 0.05; done\nfi\nexec '"+real+"' \"$@\"\n", 0755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+			if _, err := os.Stat(started); err == nil {
+				break
+			}
+		}
+		cancel()
+	}()
+	if err := r.Commit(ctx, "fix: canceled\n", nil, nil, nil); ExitCode(err) != 130 {
+		t.Fatalf("canceled commit: %v", err)
+	}
+	if _, err := os.Stat(cleaned); err != nil {
+		t.Fatalf("git was killed without running its cleanup: %v", err)
 	}
 }
 

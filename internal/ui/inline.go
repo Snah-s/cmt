@@ -20,12 +20,34 @@ type inlineSelectorModel struct {
 	selector *huh.Select[string]
 	step     string
 	answers  []string
+	emojis   *emojiSelector
+	width    int
+	height   int
+	input    io.Reader
+	output   io.Writer
 	done     bool
 }
 
-func (m *inlineSelectorModel) Init() tea.Cmd { return m.form.Init() }
+func (m *inlineSelectorModel) Init() tea.Cmd {
+	if m.step == "emoji" {
+		return tea.RequestWindowSize
+	}
+	return m.form.Init()
+}
 
 func (m *inlineSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if size, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width, m.height = size.Width, size.Height
+	}
+	if m.step == "emoji" {
+		model, cmd := m.updateEmoji(msg)
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg:
+			// Legacy terminals disagree on emoji widths; repaint until incremental redraw passes all width modes.
+			return model, tea.Batch(cmd, tea.ClearScreen)
+		}
+		return model, cmd
+	}
 	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "esc" {
 		if !m.selector.GetFiltering() {
 			m.form.State = huh.StateAborted
@@ -40,10 +62,6 @@ func (m *inlineSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	_, cmd := m.form.Update(msg)
-	if _, ok := msg.(tea.KeyPressMsg); ok && m.step == "emoji" {
-		// shortcut: repaint the inline list until incremental rendering handles differing emoji widths.
-		return m, tea.Batch(cmd, tea.ClearScreen)
-	}
 	return m, cmd
 }
 
@@ -55,9 +73,13 @@ func (m *inlineSelectorModel) View() tea.View {
 	if content != "" {
 		content += "\n"
 	}
-	content += m.selector.View()
-	if err := m.selector.Error(); err != nil {
-		content += "\n" + err.Error()
+	if m.step == "emoji" {
+		content += m.emojis.view(m.width, m.height-len(m.answers))
+	} else {
+		content += m.selector.View()
+		if err := m.selector.Error(); err != nil {
+			content += "\n" + err.Error()
+		}
 	}
 	view := tea.NewView(content)
 	view.ReportFocus = true
@@ -84,21 +106,7 @@ func (m *inlineSelectorModel) answer() string {
 }
 
 func (m *commitForm) inlineSelector(input io.Reader, output io.Writer) *inlineSelectorModel {
-	selector := &inlineSelectorModel{owner: m}
-	// Huh otherwise rebuilds the theme for each option on every render.
-	light, dark := huh.ThemeCharm(false), huh.ThemeCharm(true)
-	theme := huh.ThemeFunc(func(isDark bool) *huh.Styles {
-		if isDark {
-			return dark
-		}
-		return light
-	})
-	selector.selector = huh.NewSelect[string]()
-	selector.selector.WithTheme(theme)
-	selector.selector.Validate(selector.validate)
-	selector.form = huh.NewForm(huh.NewGroup(selector.selector)).WithInput(input).WithOutput(output).
-		WithShowHelp(false).WithTheme(theme)
-	selector.form.SubmitCmd, selector.form.CancelCmd = tea.Quit, tea.Quit
+	selector := &inlineSelectorModel{owner: m, input: input, output: output, form: &huh.Form{}}
 	selector.configure(selector.nextStep(""))
 	return selector
 }
@@ -168,6 +176,25 @@ func (m *inlineSelectorModel) configure(step string) {
 		return
 	}
 	m.step = step
+	if step == "emoji" {
+		m.emojis = newEmojiSelector(m.owner)
+		return
+	}
+	if m.selector == nil {
+		// Huh otherwise rebuilds the theme for each option on every render.
+		light, dark := huh.ThemeCharm(false), huh.ThemeCharm(true)
+		theme := huh.ThemeFunc(func(isDark bool) *huh.Styles {
+			if isDark {
+				return dark
+			}
+			return light
+		})
+		m.selector = huh.NewSelect[string]().Validate(m.validate)
+		m.selector.WithTheme(theme)
+		m.form = huh.NewForm(huh.NewGroup(m.selector)).WithInput(m.input).WithOutput(m.output).
+			WithShowHelp(false).WithTheme(theme)
+		m.form.SubmitCmd, m.form.CancelCmd = tea.Quit, tea.Quit
+	}
 	var title string
 	var options []huh.Option[string]
 	var value *string
@@ -176,8 +203,6 @@ func (m *inlineSelectorModel) configure(step string) {
 		title, options, value = "Choose a format", huh.NewOptions("standard", "emoji", "hybrid"), &m.owner.draft.Mode
 	case "type":
 		title, options, value = "Choose a commit type", huh.NewOptions(commit.Types...), &m.owner.draft.Type
-	case "emoji":
-		title, options, value = "Choose an emoji", m.owner.emojiOptions(), &m.owner.draft.Emoji
 	case "scope":
 		title, value = "Choose a scope (optional)", &m.owner.draft.Scope
 		options = append(options, huh.NewOption("Skip scope", ""))
@@ -191,13 +216,19 @@ func (m *inlineSelectorModel) configure(step string) {
 	var temporary string
 	m.selector.Value(&temporary).Title(title).Options(options...).Height(1 + min(5, len(options)))
 	m.selector.Value(value).Validate(m.validate).Focus()
+	if m.width > 0 {
+		_, _ = m.form.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+	}
 }
 
 func (m *inlineSelectorModel) choose() tea.Cmd {
 	if answer := m.answer(); answer != "" {
 		m.answers = append(m.answers, answer)
 	}
-	m.selector.Blur()
+	hadSelector := m.selector != nil
+	if hadSelector {
+		m.selector.Blur()
+	}
 	if m.step == "format" || m.step == "type" {
 		reconcile(&m.owner.draft, m.owner.catalog)
 	}
@@ -207,6 +238,9 @@ func (m *inlineSelectorModel) choose() tea.Cmd {
 		return tea.Quit
 	}
 	m.configure(next)
+	if !hadSelector && m.selector != nil {
+		return m.form.Init()
+	}
 	return nil
 }
 
