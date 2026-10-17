@@ -31,6 +31,9 @@ Exact matches come first; abbreviations and simple typos also match. Use ↑/↓
 to scroll the circular list, Enter to select, and Esc to clear search or cancel.
 The body prompt accepts one optional line; leaving it empty keeps any body received
 from flags or the hook, including trailers such as `Signed-off-by`.
+Press Ctrl+O there to write the body in an editor: the `editor` preference
+(`config --set 'editor="nvim"'`), or else the first installed of nano, micro,
+nvim, vim, hx and vi. Saving an empty file removes the body; an editor error keeps it.
 Without a terminal, complete arguments authorize the commit directly.
 Only changes already staged with `git add` are committed, including partial
 selections. cmt never stages untracked files or unstaged changes. The retired

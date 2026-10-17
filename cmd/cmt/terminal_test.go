@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -217,6 +218,34 @@ func TestEmojiThenConfiguredScopeTerminal(t *testing.T) {
 	}
 }
 
+func TestBodyEditorTerminal(t *testing.T) {
+	dir := t.TempDir()
+	editor := filepath.Join(dir, "editor with spaces")
+	// The editor runs on the terminal: it must see a TTY, and the prompts after it must still work.
+	script := "#!/bin/sh\n[ -t 0 ] && [ -t 1 ] || exit 9\nprintf 'first paragraph\\n\\nSigned-off-by: Ana\\n' > \"$1\"\n"
+	if err := os.WriteFile(editor, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	config, err := json.Marshal(map[string]any{"editor": editor, "scopePrompt": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), config, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := helperCommand("prototype", "--format=standard", "--type=docs", "--title=update guide")
+	cmd.Dir = dir
+	s := startTerminal(t, cmd)
+	s.answer(t, "Choose a commit type", "\r")
+	s.answer(t, "Enter the commit title", "\r")
+	s.answer(t, "Ctrl+O: write it in editor with spaces", "\x0f")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 0)
+	if got := s.stdout.String(); got != "docs: update guide\n\nfirst paragraph\n\nSigned-off-by: Ana\n" {
+		t.Fatalf("editor body: %q", got)
+	}
+}
+
 func TestAccessibleTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--accessible"))
 	s.answer(t, "Choose a format", "\x1b[B\x1b[B\r")
@@ -224,7 +253,7 @@ func TestAccessibleTerminal(t *testing.T) {
 	s.answer(t, "Choose an emoji", "/memo\r")
 	s.answer(t, "Scope", "\n")
 	s.answer(t, "Enter the commit title", "update guide\n")
-	s.answer(t, "Body (optional)", "\n")
+	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\n")
 	s.finish(t, 0)
 	if got := s.stdout.String(); got != "docs: 📝 update guide\n" {
@@ -357,6 +386,7 @@ func TestPreferenceTerminal(t *testing.T) {
 	s.answer(t, "Capitalize", "n\n")
 	s.answer(t, "Scope prompt", "false\n")
 	s.answer(t, "Prompt for a message body", "n\n")
+	s.answer(t, "Body editor", "\n")
 	s.answer(t, "Catalog URL", "\n")
 	s.answer(t, "Save global", "y\n")
 	s.finish(t, 0)

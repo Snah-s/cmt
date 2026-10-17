@@ -32,23 +32,39 @@ func testCatalog(t *testing.T) catalog.Catalog {
 	return c
 }
 
-// fill drives the inline selectors with keys, then answers the text prompts with lines.
-func fill(t *testing.T, m *commitForm, lines string, keys ...rune) (Draft, string, error) {
+// press sends keys to a model, with the text a terminal would type for printable keys.
+func press(model tea.Model, keys ...rune) {
+	for _, key := range keys {
+		msg := tea.KeyPressMsg{Code: key}
+		if unicode.IsPrint(key) {
+			msg.Text = string(key)
+		}
+		model.Update(msg)
+	}
+}
+
+// fill drives the selectors with keys, the text prompts with lines and, unless hidden, types body.
+func fill(t *testing.T, m *commitForm, lines, body string, keys ...rune) (Draft, string, error) {
 	t.Helper()
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
-	for _, key := range keys {
-		press := tea.KeyPressMsg{Code: key}
-		if unicode.IsPrint(key) {
-			press.Text = string(key)
-		}
-		selector.Update(press)
-	}
+	press(selector, keys...)
 	if !selector.done {
 		t.Fatalf("selectors stopped at %q", selector.step)
 	}
 	var output bytes.Buffer
 	output.WriteString(strings.Join(selector.answers, "\n") + "\n")
-	err := m.textFields(&lineReader{reader: strings.NewReader(lines)}, &output)
+	r := &lineReader{reader: strings.NewReader(lines)}
+	if err := m.textFields(r, &output); err != nil {
+		return Draft{}, output.String(), err
+	}
+	if !m.options.HideBody {
+		prompt := newBodyModel(m.options.Editor)
+		press(prompt, append([]rune(body), tea.KeyEnter)...)
+		if done, err := m.applyBody(prompt, nil, &output); !done || err != nil {
+			t.Fatalf("body prompt: done=%v err=%v", done, err)
+		}
+	}
+	err := m.confirmFields(r, &output)
 	return m.draft.Active(), output.String(), err
 }
 
@@ -56,32 +72,32 @@ func TestPreferencePromptsAndPreview(t *testing.T) {
 	c := testCatalog(t)
 	original := Draft{Mode: "hybrid", Type: "docs", Emoji: ":memo:", Scope: "api", Description: "update README", Body: "  original\n\nSigned-off-by: Ana\n"}
 	opts := Options{FormatExplicit: true, HideScope: true, HideBody: true, MessageOptions: commit.Options{EmojiFormat: "code"}}
-	d, output, err := fill(t, newCommitForm(c, original, opts), "\ny\n", tea.KeyEnter, tea.KeyEnter)
+	d, output, err := fill(t, newCommitForm(c, original, opts), "\ny\n", "", tea.KeyEnter, tea.KeyEnter)
 	if err != nil || d != original || !strings.Contains(output, "docs(api): :memo: update README") || strings.Contains(output, "Scope (") || strings.Contains(output, "Body (optional)") {
 		t.Fatalf("hidden prompts/preview: %+v %v / %q", d, err, output)
 	}
 	opts.HideScope = false
 	opts.Scopes = []string{"api", "cli"}
-	d, _, err = fill(t, newCommitForm(c, original, opts), "\ny\n", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
+	d, _, err = fill(t, newCommitForm(c, original, opts), "\ny\n", "", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
 	if err != nil || d.Scope != "" || d.Body != original.Body {
 		t.Fatalf("optional configured scope: %+v %v", d, err)
 	}
 	opts.Scopes = []string{}
-	d, output, err = fill(t, newCommitForm(c, original, opts), "\ny\n", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
+	d, output, err = fill(t, newCommitForm(c, original, opts), "\ny\n", "", tea.KeyEnter, tea.KeyEnter, tea.KeyUp, tea.KeyEnter)
 	if err != nil || d.Scope != "" || !strings.Contains(output, "Skip scope") || strings.Contains(output, "Scope (optional)") {
 		t.Fatalf("empty configured scope list accepted a new scope: %+v %v / %q", d, err, output)
 	}
 	opts.MessageOptions = commit.Options{EmojiFormat: "code", CapitalizeTitle: false}
 	opts.HideScope = true
-	d, output, err = fill(t, newCommitForm(c, Draft{Mode: "emoji", Emoji: ":memo:", Description: "update README"}, opts), "\ny\n", tea.KeyEnter)
+	d, output, err = fill(t, newCommitForm(c, Draft{Mode: "emoji", Emoji: ":memo:", Description: "update README"}, opts), "\ny\n", "", tea.KeyEnter)
 	if err != nil || d.Description != "update README" || !strings.Contains(output, ":memo: update README") {
 		t.Fatalf("preview differs from preferences: %+v %v / %q", d, err, output)
 	}
 }
 
 func TestAccessibleConfiguration(t *testing.T) {
-	p, err := Configure(context.Background(), strings.NewReader("hybrid\ncode\nn\n[\"api\",\"cli\"]\nn\n\ny\n"), io.Discard, config.Defaults())
-	if err != nil || p.CommitFormat != "hybrid" || p.EmojiFormat != "code" || p.CapitalizeTitle || p.MessagePrompt || !p.ScopePrompt || len(p.Scopes) != 2 {
+	p, err := Configure(context.Background(), strings.NewReader("hybrid\ncode\nn\n[\"api\",\"cli\"]\nn\nnvim\n\ny\n"), io.Discard, config.Defaults())
+	if err != nil || p.CommitFormat != "hybrid" || p.EmojiFormat != "code" || p.CapitalizeTitle || p.MessagePrompt || !p.ScopePrompt || len(p.Scopes) != 2 || p.Editor != "nvim" {
 		t.Fatalf("configuration: %+v %v", p, err)
 	}
 	if _, err := Configure(context.Background(), strings.NewReader(""), io.Discard, config.Defaults()); !errors.Is(err, io.EOF) {
@@ -178,17 +194,17 @@ func TestModesAndTextEOF(t *testing.T) {
 				keys = append(append(keys, []rune(":memo:")...), tea.KeyEnter)
 			}
 			m := newCommitForm(c, Draft{}, Options{})
-			d, output, err := fill(t, m, "\nupdate guide\nfirst paragraph\ny\n", keys...)
+			d, output, err := fill(t, m, "\nupdate guide\ny\n", "first paragraph", keys...)
 			if err != nil || d.Mode != mode || d.Body != "first paragraph" || !strings.Contains(output, m.message().Text) ||
 				(mode != "emoji" && d.Type != "docs") || (mode != "standard" && d.Emoji != ":memo:") {
 				t.Fatalf("mode answers: %+v %v / %q", d, err, output)
 			}
 		})
 	}
-	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("\nupdate guide\n")}, io.Discard); !errors.Is(err, io.EOF) {
+	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("\n")}, io.Discard); !errors.Is(err, io.EOF) {
 		t.Fatalf("text EOF: %v", err)
 	}
-	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("\nupdate guide\n\nn\n")}, io.Discard); !errors.Is(err, ErrCanceled) {
+	if err := newCommitForm(c, Draft{Description: "update guide"}, Options{}).confirmFields(&lineReader{reader: strings.NewReader("n\n")}, io.Discard); !errors.Is(err, ErrCanceled) {
 		t.Fatalf("cancellation: %v", err)
 	}
 }
@@ -254,18 +270,19 @@ func TestOptionalSingleLineBody(t *testing.T) {
 	for _, body := range []string{"", "one paragraph", "  indented body  "} {
 		t.Run(body, func(t *testing.T) {
 			m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Body: "old body\n\nSigned-off-by: Ana"}, Options{HideScope: true})
+			prompt := newBodyModel("")
+			if view := ansi.Strip(prompt.View().Content); !strings.Contains(view, "Body (optional)") || strings.Contains(view, "Ctrl+O") {
+				t.Fatalf("body prompt without an editor: %q", view)
+			}
+			press(prompt, append([]rune(body), tea.KeyEnter)...)
 			var output bytes.Buffer
-			err := m.textFields(&lineReader{reader: strings.NewReader("update guide\n" + body + "\ny\n")}, &output)
-			view := output.String()
+			done, err := m.applyBody(prompt, nil, &output)
 			want := body
 			if body == "" {
 				want = "old body\n\nSigned-off-by: Ana"
 			}
-			if err != nil || m.draft.Body != want || !m.confirmed {
-				t.Fatalf("body: %q, confirmed=%v, err=%v", m.draft.Body, m.confirmed, err)
-			}
-			if strings.Count(view, "Body (optional)") != 1 || strings.Contains(view, "Write/replace") || strings.Contains(view, "/done") {
-				t.Fatalf("body asked for extra input: %q", view)
+			if !done || err != nil || m.draft.Body != want {
+				t.Fatalf("body: %q, done=%v, err=%v", m.draft.Body, done, err)
 			}
 		})
 	}
@@ -275,7 +292,11 @@ func TestConfirmationDescription(t *testing.T) {
 	const description = "Creates a Git commit from the index."
 	m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Description: "update guide"}, Options{HideScope: true, HideBody: true, ConfirmDescription: description})
 	var output bytes.Buffer
-	if err := m.textFields(&lineReader{reader: strings.NewReader("\ny\n")}, &output); err != nil {
+	r := &lineReader{reader: strings.NewReader("\ny\n")}
+	if err := m.textFields(r, &output); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.confirmFields(r, &output); err != nil {
 		t.Fatal(err)
 	}
 	text := output.String()

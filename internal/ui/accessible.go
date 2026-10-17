@@ -3,7 +3,6 @@ package ui
 import (
 	"context"
 	"io"
-	"strings"
 
 	"charm.land/huh/v2"
 	"github.com/muesli/cancelreader"
@@ -12,10 +11,8 @@ import (
 // Huh creates a scanner per field: limiting reads avoids consuming the next
 // answer and detects EOF that its accessible form does not propagate.
 type lineReader struct {
-	reader   io.Reader
-	err      error
-	line     strings.Builder
-	lastLine string
+	reader io.Reader
+	err    error
 }
 
 func (r *lineReader) Read(p []byte) (int, error) {
@@ -23,14 +20,6 @@ func (r *lineReader) Read(p []byte) (int, error) {
 		p = p[:1]
 	}
 	n, err := r.reader.Read(p)
-	if n > 0 {
-		if p[0] == '\n' {
-			r.lastLine = strings.TrimSuffix(r.line.String(), "\r")
-			r.line.Reset()
-		} else {
-			r.line.WriteByte(p[0])
-		}
-	}
 	if err != nil {
 		r.err = err
 	}

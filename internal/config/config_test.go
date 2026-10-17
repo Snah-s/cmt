@@ -260,3 +260,24 @@ func importProfile(source, destination string) (Preferences, error) {
 	}
 	return p, Create(destination, p)
 }
+
+func TestEditorPreference(t *testing.T) {
+	p, err := Defaults().Set([]string{`editor="nvim"`})
+	if err != nil || p.Editor != "nvim" {
+		t.Fatalf("set editor: %+v %v", p, err)
+	}
+	if data, err := p.JSON(); err != nil || !bytes.Contains(data, []byte(`"editor": "nvim"`)) {
+		t.Fatalf("saved editor: %s %v", data, err)
+	}
+	if p, err = p.Set([]string{`editor=""`}); err != nil || p.Editor != "" {
+		t.Fatalf("clear editor: %+v %v", p, err)
+	}
+	if data, err := p.JSON(); err != nil || bytes.Contains(data, []byte("editor")) {
+		t.Fatalf("unset editor was saved: %s %v", data, err)
+	}
+	for _, data := range []string{`{"editor":17}`, `{"editor":null}`, `{"editor":"-c"}`, `{"editor":"vi\u0007"}`} {
+		if _, err := Parse([]byte(data), false); err == nil {
+			t.Fatalf("accepted %s", data)
+		}
+	}
+}

@@ -31,6 +31,7 @@ type Options struct {
 	Scopes              []string
 	MessageOptions      commit.Options
 	ConfirmDescription  string
+	Editor              string
 }
 
 func newCommitForm(c catalog.Catalog, draft Draft, options Options) *commitForm {
@@ -101,24 +102,16 @@ func (m *commitForm) textFields(r *lineReader, output io.Writer) error {
 			return err
 		}
 	}
-	if err := run(huh.NewInput().Title("Enter the commit title").Value(&m.draft.Description).Validate(func(v string) error {
+	return run(huh.NewInput().Title("Enter the commit title").Value(&m.draft.Description).Validate(func(v string) error {
 		if v == "" {
 			v = m.draft.Description
 		}
 		return commit.ValidateDescription(v)
-	})); err != nil {
-		return err
-	}
-	if !m.options.HideBody {
-		var body string
-		if err := run(huh.NewInput().Title("Body (optional)").Value(&body).Validate(commit.ValidateBody)); err != nil {
-			return err
-		}
-		// PromptString trims whitespace; preserve the literal body entered. Empty keeps a received body and its trailers.
-		if r.lastLine != "" {
-			m.draft.Body = r.lastLine
-		}
-	}
+	}))
+}
+
+func (m *commitForm) confirmFields(r *lineReader, output io.Writer) error {
+	run := func(field huh.Field) error { return accessibleField(r, output, field) }
 	if err := commit.ValidateBody(m.draft.Body); err != nil {
 		return err
 	}

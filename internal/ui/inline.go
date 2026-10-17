@@ -181,14 +181,7 @@ func (m *inlineSelectorModel) configure(step string) {
 		return
 	}
 	if m.selector == nil {
-		// Huh otherwise rebuilds the theme for each option on every render.
-		light, dark := huh.ThemeCharm(false), huh.ThemeCharm(true)
-		theme := huh.ThemeFunc(func(isDark bool) *huh.Styles {
-			if isDark {
-				return dark
-			}
-			return light
-		})
+		theme := charmTheme()
 		m.selector = huh.NewSelect[string]().Validate(m.validate)
 		m.selector.WithTheme(theme)
 		m.form = huh.NewForm(huh.NewGroup(m.selector)).WithInput(m.input).WithOutput(m.output).
@@ -244,6 +237,17 @@ func (m *inlineSelectorModel) choose() tea.Cmd {
 	return nil
 }
 
+// charmTheme caches both variants: Huh otherwise rebuilds the theme for each option on every render.
+func charmTheme() huh.ThemeFunc {
+	light, dark := huh.ThemeCharm(false), huh.ThemeCharm(true)
+	return func(isDark bool) *huh.Styles {
+		if isDark {
+			return dark
+		}
+		return light
+	}
+}
+
 func (m *commitForm) inlineFields(ctx context.Context, input io.Reader, output io.Writer) error {
 	selector := m.inlineSelector(input, output)
 	err := runProgram(ctx, selector, input, output)
@@ -258,7 +262,18 @@ func (m *commitForm) inlineFields(ctx context.Context, input io.Reader, output i
 			return err
 		}
 	}
-	return runAccessible(ctx, input, func(reader io.Reader) error {
+	if err := runAccessible(ctx, input, func(reader io.Reader) error {
 		return m.textFields(&lineReader{reader: reader}, output)
+	}); err != nil {
+		return err
+	}
+	// The body prompt reads keys in raw mode so Ctrl+O can open the editor.
+	if !m.options.HideBody {
+		if err := m.bodyField(ctx, input, output); err != nil {
+			return err
+		}
+	}
+	return runAccessible(ctx, input, func(reader io.Reader) error {
+		return m.confirmFields(&lineReader{reader: reader}, output)
 	})
 }

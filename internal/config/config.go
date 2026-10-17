@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/Snah-s/cmt/internal/commit"
@@ -26,6 +27,7 @@ type Preferences struct {
 	CapitalizeTitle bool
 	CatalogURL      string
 	CommitFormat    string
+	Editor          string
 	Unknown         map[string]json.RawMessage
 }
 
@@ -71,6 +73,8 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 			target = &p.CatalogURL
 		case "commitFormat":
 			target = &p.CommitFormat
+		case "editor":
+			target = &p.Editor
 		case "scopePrompt":
 			if bytes.HasPrefix(value, []byte("[")) {
 				if err := json.Unmarshal(value, &p.Scopes); err != nil {
@@ -105,6 +109,10 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 	if !slices.Contains([]string{"standard", "emoji", "hybrid"}, p.CommitFormat) {
 		return p, errors.New("commitFormat: choose standard, emoji, or hybrid")
 	}
+	// The editor runs as a program name or path, never through a shell.
+	if strings.ContainsFunc(p.Editor, unicode.IsControl) || strings.HasPrefix(p.Editor, "-") {
+		return p, errors.New("editor: expected a program name or path")
+	}
 	if !slices.Contains([]string{"emoji", "code"}, p.EmojiFormat) {
 		return p, errors.New("emojiFormat: choose emoji or code")
 	}
@@ -138,6 +146,9 @@ func (p Preferences) JSON() ([]byte, error) {
 	fields["messagePrompt"] = p.MessagePrompt
 	fields["emojiFormat"], fields["capitalizeTitle"] = p.EmojiFormat, p.CapitalizeTitle
 	fields["catalogUrl"], fields["commitFormat"] = p.CatalogURL, p.CommitFormat
+	if p.Editor != "" {
+		fields["editor"] = p.Editor
+	}
 	fields["scopePrompt"] = p.ScopePrompt
 	if p.Scopes != nil {
 		fields["scopePrompt"] = p.Scopes
@@ -278,7 +289,7 @@ func (p Preferences) Set(assignments []string) (Preferences, error) {
 			return p, fmt.Errorf("--set: expected KEY=JSON, got %q", assignment)
 		}
 		switch key {
-		case "scopePrompt", "messagePrompt", "emojiFormat", "capitalizeTitle", "catalogUrl", "commitFormat":
+		case "scopePrompt", "messagePrompt", "emojiFormat", "capitalizeTitle", "catalogUrl", "commitFormat", "editor":
 			fields[key] = json.RawMessage(value)
 		default:
 			return p, fmt.Errorf("--set: unknown preference %q", key)

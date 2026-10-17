@@ -56,6 +56,10 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 			return err
 		}),
 		huh.NewConfirm().Title("Prompt for a message body?").Value(&p.MessagePrompt),
+		huh.NewInput().Title("Body editor (empty: first installed of nano, micro, nvim, vim, hx, vi)").Value(&p.Editor).Validate(func(value string) error {
+			_, err := p.Set([]string{"editor=" + quoteDefault(value, p.Editor)})
+			return err
+		}),
 		huh.NewInput().Title("Catalog URL").Value(&p.CatalogURL).Validate(func(value string) error {
 			_, err := p.Set([]string{"catalogUrl=" + quoteDefault(value, p.CatalogURL)})
 			return err
