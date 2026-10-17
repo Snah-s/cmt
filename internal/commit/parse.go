@@ -10,7 +10,7 @@ import (
 	"github.com/Snah-s/cmt/internal/catalog"
 )
 
-var conventionalHeader = regexp.MustCompile(`^([a-zA-Z]+)(?:\(([^()]+)\))?: (.*)$`)
+var conventionalHeader = regexp.MustCompile(`^([a-zA-Z]+)(?:\(([^()]+)\))?(!)?: (.*)$`)
 var emojiScope = regexp.MustCompile(`^\(([^()]+)\): (.*)$`)
 
 // Parse recognizes known prefixes; a free-form title keeps Mode empty.
@@ -34,7 +34,7 @@ func Parse(text string, c catalog.Catalog) (Draft, error) {
 	}
 	d := Draft{Description: title, Body: body}
 	if match := conventionalHeader.FindStringSubmatch(title); match != nil {
-		d.Mode, d.Type, d.Scope, d.Description = "standard", match[1], match[2], match[3]
+		d.Mode, d.Type, d.Scope, d.Breaking, d.Description = "standard", match[1], match[2], match[3] == "!", match[4]
 		if code, rest := leadingEmoji(d.Description, c); code != "" {
 			d.Mode, d.Emoji, d.Description = "hybrid", code, rest
 		}

@@ -25,7 +25,8 @@ requested; normal use is offline. Run `cmt --help` for commands and flags.
 another mode, `--title` for the description, `--scope` for an optional scope,
 and `--message` for the body. Types are the 11 of Conventional Commits tooling:
 `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `style`, `build`, `ci`
-and `revert`.
+and `revert`. Mark a breaking change with `--breaking`, or press `!` in the type
+selector: `feat(api)!: …`. Explain it with a `BREAKING CHANGE:` footer in the body.
 In a terminal, review the prompts and confirm before committing.
 
 Type directly in the emoji selector to search names, codes and descriptions.

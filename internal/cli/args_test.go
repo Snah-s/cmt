@@ -89,3 +89,23 @@ func TestExplicitDefaults(t *testing.T) {
 		t.Fatalf("explicit empty values: %+v", d)
 	}
 }
+
+func TestBreakingFlag(t *testing.T) {
+	o, err := Parse([]string{"commit", "--breaking", "--type", "feat", "--title", "drop api keys"})
+	if err != nil || !o.BreakingSet || !o.Draft.Breaking {
+		t.Fatalf("--breaking: %+v %v", o, err)
+	}
+	if d := o.Defaults(commit.Draft{Mode: "standard", Type: "fix"}); !d.Breaking || d.Type != "feat" {
+		t.Fatalf("hook defaults: %+v", d)
+	}
+	o, err = Parse([]string{"hook", "msg", "--breaking=false"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := o.Defaults(commit.Draft{Mode: "standard", Type: "feat", Breaking: true}); d.Breaking {
+		t.Fatal("--breaking=false kept the parsed mark")
+	}
+	if _, err := Parse([]string{"list", "--breaking"}); err == nil {
+		t.Fatal("--breaking accepted outside commit and hook")
+	}
+}

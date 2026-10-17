@@ -355,3 +355,19 @@ func TestElevenTypesInSelector(t *testing.T) {
 		t.Fatalf("revert emojis: %v", codes)
 	}
 }
+
+func TestBreakingToggleInTypeSelector(t *testing.T) {
+	owner := newCommitForm(testCatalog(t), Draft{Mode: "standard"}, Options{FormatExplicit: true, HideScope: true})
+	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
+	if view := ansi.Strip(selector.View().Content); !strings.Contains(view, "!: mark a breaking change") {
+		t.Fatalf("missing ! hint: %q", view)
+	}
+	press(selector, tea.KeyDown, '!')
+	if view := ansi.Strip(selector.View().Content); !owner.draft.Breaking || !strings.Contains(view, "> fix!") {
+		t.Fatalf("! did not mark the hovered type: breaking=%v view=%q", owner.draft.Breaking, view)
+	}
+	press(selector, '!', '!', tea.KeyEnter)
+	if !selector.done || owner.draft.Type != "fix" || !owner.draft.Breaking || selector.answers[0] != "? Choose a commit type: fix! (breaking change)" {
+		t.Fatalf("breaking type: %+v %q", owner.draft, selector.answers)
+	}
+}

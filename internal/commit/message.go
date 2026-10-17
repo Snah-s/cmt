@@ -15,6 +15,8 @@ var Types = catalog.CommitTypes
 
 type Draft struct {
 	Mode, Type, Emoji, Scope, Description, Body string
+	// Breaking adds the Conventional Commits `!` before the colon; emoji mode has no type to mark.
+	Breaking bool
 }
 
 type Options struct {
@@ -69,6 +71,9 @@ func (d Draft) ValidateFields(c catalog.Catalog, complete bool) error {
 	case "emoji":
 		if d.Type != "" {
 			return errors.New("--type is not supported in emoji mode")
+		}
+		if d.Breaking {
+			return errors.New("--breaking is not supported in emoji mode")
 		}
 	default:
 		return errors.New("--format: choose emoji, standard, or hybrid")
@@ -129,6 +134,9 @@ func Preview(d Draft, c catalog.Catalog, options Options) Message {
 		if d.Scope != "" {
 			title += "(" + d.Scope + ")"
 		}
+		if d.Breaking {
+			title += "!"
+		}
 		title += ": "
 		if d.Mode == "hybrid" {
 			title += symbol + " "
@@ -149,7 +157,7 @@ func (d Draft) Active() Draft {
 		d.Emoji = ""
 	}
 	if d.Mode == "emoji" {
-		d.Type = ""
+		d.Type, d.Breaking = "", false
 	}
 	return d
 }

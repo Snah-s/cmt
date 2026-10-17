@@ -218,6 +218,21 @@ func TestEmojiThenConfiguredScopeTerminal(t *testing.T) {
 	}
 }
 
+func TestBreakingTypeTerminal(t *testing.T) {
+	s := startTerminal(t, helperCommand("prototype", "--format=hybrid", "--scope=api", "--title=drop api keys"))
+	s.answer(t, "!: mark a breaking change", "!")
+	s.answer(t, "breaking change marked", "\r")
+	s.answer(t, "Choose an emoji", "boom\r")
+	s.answer(t, "Scope", "\r")
+	s.answer(t, "Enter the commit title", "\r")
+	s.answer(t, "Body (optional)", "\r")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 0)
+	if got := s.stdout.String(); got != "feat(api)!: 💥 drop api keys\n" {
+		t.Fatalf("breaking message: %q", got)
+	}
+}
+
 func TestBodyEditorTerminal(t *testing.T) {
 	dir := t.TempDir()
 	editor := filepath.Join(dir, "editor with spaces")

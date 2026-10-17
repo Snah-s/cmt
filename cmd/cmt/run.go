@@ -166,7 +166,7 @@ func run(ctx context.Context, args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		if !o.TitleSet && !o.TypeSet && !o.EmojiSet && !o.ScopeSet && !o.BodySet && parsed.Mode == o.Draft.Mode && parsed.ValidateFields(c, true) == nil {
+		if !o.TitleSet && !o.TypeSet && !o.BreakingSet && !o.EmojiSet && !o.ScopeSet && !o.BodySet && parsed.Mode == o.Draft.Mode && parsed.ValidateFields(c, true) == nil {
 			return 0
 		}
 		draft = o.Defaults(parsed)

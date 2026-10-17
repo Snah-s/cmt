@@ -114,7 +114,7 @@ func TestMessageValidationAndRecovery(t *testing.T) {
 	if _, err := Build(base, c, Options{EmojiFormat: "other"}); err == nil {
 		t.Fatal("accepted invalid emojiFormat")
 	}
-	for _, text := range []string{"free-form description", "change ✨ in the middle", ":unknown: keep literal", "feat!: preserve title", "feat(): preserve"} {
+	for _, text := range []string{"free-form description", "change ✨ in the middle", ":unknown: keep literal", "feat(): preserve", "feat!!: preserve"} {
 		d, err := Parse(text+"\n\n  body\n\nSigned-off-by: Ana\n", c)
 		if err != nil || d.Mode != "" || d.Description != text || d.Body != "  body\n\nSigned-off-by: Ana\n" {
 			t.Fatalf("recovery: %+v, %v", d, err)
@@ -128,5 +128,37 @@ func TestMessageValidationAndRecovery(t *testing.T) {
 		if _, err := Parse(text, c); err == nil {
 			t.Fatalf("accepted %q", text)
 		}
+	}
+}
+
+func TestBreakingChange(t *testing.T) {
+	c, err := catalog.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := "detail\n\nBREAKING CHANGE: clients must send tokens\nSigned-off-by: Ana"
+	for _, tc := range []struct {
+		draft Draft
+		title string
+	}{
+		{Draft{Mode: "standard", Type: "feat", Description: "drop api keys", Breaking: true}, "feat!: drop api keys"},
+		{Draft{Mode: "standard", Type: "refactor", Scope: "api", Description: "drop api keys", Breaking: true}, "refactor(api)!: drop api keys"},
+		{Draft{Mode: "hybrid", Type: "fix", Emoji: ":boom:", Scope: "api", Description: "drop api keys", Breaking: true}, "fix(api)!: 💥 drop api keys"},
+	} {
+		tc.draft.Body = body
+		message, err := Build(tc.draft, c, DefaultOptions())
+		if err != nil || message.Title != tc.title {
+			t.Fatalf("build %+v: %q, %v", tc.draft, message.Title, err)
+		}
+		parsed, err := Parse(message.Text, c)
+		if err != nil || parsed != tc.draft {
+			t.Fatalf("round trip %q: %+v, %v", message.Text, parsed, err)
+		}
+	}
+	if _, err := Build(Draft{Mode: "emoji", Emoji: ":boom:", Description: "drop api keys", Breaking: true}, c, DefaultOptions()); err == nil {
+		t.Fatal("emoji mode accepted a breaking mark")
+	}
+	if d := (Draft{Mode: "emoji", Type: "feat", Breaking: true}).Active(); d.Breaking || d.Type != "" {
+		t.Fatalf("emoji mode kept hidden type fields: %+v", d)
 	}
 }

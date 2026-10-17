@@ -54,6 +54,15 @@ func (m *inlineSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
+	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "!" && m.step == "type" && !m.selector.GetFiltering() {
+		// Rebuilding the step keeps the cursor on the hovered type and shows the mark on every option.
+		if kind, ok := m.selector.Hovered(); ok {
+			m.owner.draft.Type = kind
+		}
+		m.owner.draft.Breaking = !m.owner.draft.Breaking
+		m.configure("type")
+		return m, nil
+	}
 	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "enter" {
 		_, _ = m.selector.Update(msg)
 		if m.selector.Error() == nil {
@@ -91,6 +100,9 @@ func (m *inlineSelectorModel) answer() string {
 	case "format":
 		return "? Choose a format: " + m.owner.draft.Mode
 	case "type":
+		if m.owner.draft.Breaking {
+			return "? Choose a commit type: " + m.owner.draft.Type + "! (breaking change)"
+		}
 		return "? Choose a commit type: " + m.owner.draft.Type
 	case "emoji":
 		if entry, ok := m.owner.catalog.Find(m.owner.draft.Emoji); ok {
@@ -188,7 +200,7 @@ func (m *inlineSelectorModel) configure(step string) {
 			WithShowHelp(false).WithTheme(theme)
 		m.form.SubmitCmd, m.form.CancelCmd = tea.Quit, tea.Quit
 	}
-	var title string
+	var title, description string
 	var options []huh.Option[string]
 	var value *string
 	switch step {
@@ -196,8 +208,13 @@ func (m *inlineSelectorModel) configure(step string) {
 		title, options, value = "Choose a format", huh.NewOptions("standard", "emoji", "hybrid"), &m.owner.draft.Mode
 	case "type":
 		title, value = "Choose a commit type", &m.owner.draft.Type
+		description = "!: mark a breaking change"
+		mark := ""
+		if m.owner.draft.Breaking {
+			description, mark = "!: breaking change marked", "!"
+		}
 		for _, kind := range commit.Types {
-			options = append(options, huh.NewOption(fmt.Sprintf("%-8s  %s", kind, typeDescriptions[kind]), kind))
+			options = append(options, huh.NewOption(fmt.Sprintf("%-9s %s", kind+mark, typeDescriptions[kind]), kind))
 		}
 	case "scope":
 		title, value = "Choose a scope (optional)", &m.owner.draft.Scope
@@ -210,7 +227,7 @@ func (m *inlineSelectorModel) configure(step string) {
 		options[0] = options[0].Selected(true)
 	}
 	var temporary string
-	m.selector.Value(&temporary).Title(title).Options(options...).Height(1 + min(5, len(options)))
+	m.selector.Value(&temporary).Title(title).Description(description).Options(options...).Height(1 + min(5, len(options)))
 	m.selector.Value(value).Validate(m.validate).Focus()
 	if m.width > 0 {
 		_, _ = m.form.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})

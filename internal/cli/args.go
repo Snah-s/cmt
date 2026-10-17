@@ -17,6 +17,7 @@ type Options struct {
 	Draft                                commit.Draft
 	Help, Version, Accessible, Prototype bool
 	FormatSet, TypeSet, EmojiSet         bool
+	BreakingSet                          bool
 	TitleSet, ScopeSet, BodySet          bool
 	ConfigSet                            []string
 	ImportFile                           string
@@ -49,6 +50,7 @@ func Parse(args []string) (Options, error) {
 	f.BoolVar(&o.Accessible, "accessible", false, "")
 	f.StringVar(&o.Draft.Mode, "format", "standard", "")
 	f.StringVar(&o.Draft.Type, "type", "", "")
+	f.BoolVar(&o.Draft.Breaking, "breaking", false, "")
 	f.StringVar(&o.Draft.Emoji, "emoji", "", "")
 	f.StringVar(&o.Draft.Description, "title", "", "")
 	f.StringVar(&o.Draft.Body, "message", "", "")
@@ -102,6 +104,8 @@ func Parse(args []string) (Options, error) {
 			o.FormatSet = true
 		case "type":
 			o.TypeSet = true
+		case "breaking":
+			o.BreakingSet = true
 		case "emoji":
 			o.EmojiSet = true
 		case "title":
@@ -178,7 +182,7 @@ func Parse(args []string) (Options, error) {
 			return o, fmt.Errorf("unexpected arguments for %s: %q", o.Command, positional)
 		}
 	}
-	if o.Command != "commit" && o.Command != "hook" && (o.FormatSet || o.TypeSet || o.EmojiSet || o.TitleSet || o.ScopeSet || o.BodySet || o.Accessible && o.Command != "config") {
+	if o.Command != "commit" && o.Command != "hook" && (o.FormatSet || o.TypeSet || o.BreakingSet || o.EmojiSet || o.TitleSet || o.ScopeSet || o.BodySet || o.Accessible && o.Command != "config") {
 		return o, fmt.Errorf("message flags are not supported with %s", o.Command)
 	}
 	if o.Command != "config" && (o.ImportSet || o.Show || len(o.ConfigSet) > 0) {
@@ -195,6 +199,9 @@ func (o Options) Defaults(initial commit.Draft) commit.Draft {
 	initial.Mode = o.Draft.Mode
 	if o.TypeSet {
 		initial.Type = o.Draft.Type
+	}
+	if o.BreakingSet {
+		initial.Breaking = o.Draft.Breaking
 	}
 	if o.EmojiSet {
 		initial.Emoji = o.Draft.Emoji
@@ -225,6 +232,7 @@ const Help = `Usage: cmt <command> [flags]
 
   --format emoji|standard|hybrid   Default: standard; overrides preferences
   --type feat|fix|docs|refactor|test|chore|perf|style|build|ci|revert
+  --breaking                     Mark a breaking change: type! (or ! in the type selector)
   --emoji :code:                  Exact catalog code
   --title DESCRIPTION            Description, without title prefixes
   --scope SCOPE                  Optional, lowercase
