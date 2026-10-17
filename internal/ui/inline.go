@@ -7,6 +7,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
@@ -21,6 +22,7 @@ type inlineSelectorModel struct {
 	step     string
 	answers  []string
 	emojis   *emojiSelector
+	custom   *promptModel
 	width    int
 	height   int
 	input    io.Reader
@@ -39,6 +41,9 @@ func (m *inlineSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width, m.height = size.Width, size.Height
 	}
+	if m.step == "customScope" {
+		return m, m.updateCustomScope(msg)
+	}
 	if m.step == "emoji" {
 		model, cmd := m.updateEmoji(msg)
 		switch msg.(type) {
@@ -47,6 +52,12 @@ func (m *inlineSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return model, tea.Batch(cmd, tea.ClearScreen)
 		}
 		return model, cmd
+	}
+	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "esc" && m.step == "scope" && m.selector.GetFiltering() {
+		// Huh keeps an applied filter after Esc; a new selector brings the whole list back.
+		m.selector, m.owner.draft.Scope = nil, ""
+		m.configure("scope")
+		return m, m.form.Init()
 	}
 	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "esc" {
 		if !m.selector.GetFiltering() {
@@ -63,7 +74,16 @@ func (m *inlineSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.configure("type")
 		return m, nil
 	}
+	if press, ok := msg.(tea.KeyPressMsg); ok && m.step == "scope" && !m.selector.GetFiltering() && press.Text != "" && press.Text != "/" && unicode.IsPrint([]rune(press.Text)[0]) {
+		// Typing filters the scope list directly, like the emoji selector; the title stays until then.
+		// "/" opens Huh's filter with its own key handling; Filtering(true) would leave Esc disabled.
+		m.selector.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	}
 	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "enter" {
+		if _, ok := m.selector.Hovered(); !ok {
+			// A filter without matches must not fall back to the previous choice (Skip scope).
+			return m, nil
+		}
 		_, _ = m.selector.Update(msg)
 		if m.selector.Error() == nil {
 			return m, m.choose()
@@ -82,9 +102,12 @@ func (m *inlineSelectorModel) View() tea.View {
 	if content != "" {
 		content += "\n"
 	}
-	if m.step == "emoji" {
+	switch m.step {
+	case "emoji":
 		content += m.emojis.view(m.width, m.height-len(m.answers))
-	} else {
+	case "customScope":
+		content += m.custom.View().Content
+	default:
 		content += m.selector.View()
 		if err := m.selector.Error(); err != nil {
 			content += "\n" + err.Error()
@@ -138,7 +161,10 @@ func (m *inlineSelectorModel) validate(value string) error {
 		}
 		return errors.New("choose a compatible emoji")
 	case "scope":
-		if slices.Contains(m.owner.scopeChoices(), value) || value == "" {
+		if value == customScope && m.owner.options.Scopes == nil {
+			return nil
+		}
+		if value == "" || slices.ContainsFunc(m.owner.scopeChoices(), func(c scopeOption) bool { return c.name == value }) {
 			return commit.ValidateScope(value)
 		}
 	}
@@ -176,7 +202,7 @@ func (m *inlineSelectorModel) modeStep() string {
 }
 
 func (m *inlineSelectorModel) scopeStep() string {
-	if !m.owner.options.HideScope && m.owner.options.Scopes != nil {
+	if !m.owner.options.HideScope {
 		return "scope"
 	}
 	return ""
@@ -217,10 +243,18 @@ func (m *inlineSelectorModel) configure(step string) {
 			options = append(options, huh.NewOption(fmt.Sprintf("%-9s %s", kind+mark, typeDescriptions[kind]), kind))
 		}
 	case "scope":
+		// Skip comes first so Enter keeps the optional scope empty unless one was received.
 		title, value = "Choose a scope (optional)", &m.owner.draft.Scope
 		options = append(options, huh.NewOption("Skip scope", ""))
-		for _, scope := range m.owner.scopeChoices() {
-			options = append(options, huh.NewOption(scope, scope))
+		for _, choice := range m.owner.scopeChoices() {
+			label := choice.name
+			if choice.note != "" {
+				label = fmt.Sprintf("%-12s %s", choice.name, choice.note)
+			}
+			options = append(options, huh.NewOption(label, choice.name))
+		}
+		if m.owner.options.Scopes == nil {
+			options = append(options, huh.NewOption("Custom scope…", customScope))
 		}
 	}
 	if len(options) > 0 {
@@ -235,6 +269,19 @@ func (m *inlineSelectorModel) configure(step string) {
 }
 
 func (m *inlineSelectorModel) choose() tea.Cmd {
+	if m.step == "scope" && m.owner.draft.Scope == customScope {
+		m.owner.draft.Scope, m.step = "", "customScope"
+		m.custom = newPrompt("Scope", "", func(value string) error {
+			if value == "" {
+				return errors.New("enter a scope, or press Esc to go back to the list")
+			}
+			return commit.ValidateScope(value)
+		})
+		if m.width > 0 {
+			m.custom.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+		}
+		return nil
+	}
 	if answer := m.answer(); answer != "" {
 		m.answers = append(m.answers, answer)
 	}
@@ -253,6 +300,26 @@ func (m *inlineSelectorModel) choose() tea.Cmd {
 	m.configure(next)
 	if !hadSelector && m.selector != nil {
 		return m.form.Init()
+	}
+	return nil
+}
+
+// updateCustomScope runs the "Custom scope…" field inside this program: Esc returns to the list,
+// Ctrl+C cancels the message, and the field's own Quit is ignored.
+func (m *inlineSelectorModel) updateCustomScope(msg tea.Msg) tea.Cmd {
+	if press, ok := msg.(tea.KeyPressMsg); ok && press.String() == "ctrl+c" {
+		m.form.State = huh.StateAborted
+		return tea.Quit
+	}
+	m.custom.Update(msg)
+	switch {
+	case m.custom.done:
+		m.owner.draft.Scope, m.step = m.custom.value(), "scope"
+		m.custom = nil
+		return m.choose()
+	case m.custom.aborted || m.custom.eof:
+		m.custom = nil
+		m.configure("scope")
 	}
 	return nil
 }
@@ -296,11 +363,6 @@ func (m *commitForm) inlineFields(ctx context.Context, input io.Reader, output i
 		if _, err := fmt.Fprintln(output, strings.Join(selector.answers, "\n")); err != nil {
 			return err
 		}
-	}
-	if err := runAccessible(ctx, input, func(reader io.Reader) error {
-		return m.textFields(&lineReader{reader: reader}, output)
-	}); err != nil {
-		return err
 	}
 	// The title and body prompts read keys in raw mode: a live counter and Ctrl+O need them.
 	if err := m.titleField(ctx, input, output); err != nil {

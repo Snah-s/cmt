@@ -160,7 +160,8 @@ func TestTerminalFlow(t *testing.T) {
 			if test.mode != "standard" {
 				s.answer(t, "Choose an emoji", "/memo\r")
 			}
-			s.answer(t, "Scope", "users\r")
+			s.answer(t, "Choose a scope", "\x1b[B\r")
+			s.answer(t, "? Scope", "users\r")
 			s.answer(t, "Enter the commit title", "add résumé search\r")
 			s.answer(t, "Body (optional)", "detail\r")
 			s.answer(t, "Finish", "y\r")
@@ -185,7 +186,7 @@ func TestTerminalFlow(t *testing.T) {
 func TestInlineEmojiTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README"))
 	s.answer(t, "Choose an emoji", "mmo\r")
-	s.answer(t, "Scope", "\r")
+	s.answer(t, "Choose a scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\r")
@@ -223,7 +224,7 @@ func TestBreakingTypeTerminal(t *testing.T) {
 	s.answer(t, "!: mark a breaking change", "!")
 	s.answer(t, "breaking change marked", "\r")
 	s.answer(t, "Choose an emoji", "boom\r")
-	s.answer(t, "Scope", "\r")
+	s.answer(t, "Choose a scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\r")
@@ -261,12 +262,46 @@ func TestBodyEditorTerminal(t *testing.T) {
 	}
 }
 
+func TestScopeSuggestionsTerminal(t *testing.T) {
+	dir, env := phase4Repo(t)
+	for _, path := range []string{"internal/ui/a.go", "internal/ui/b.go", "docs/guide.md"} {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(path), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitCommand(t, dir, env, "add", "docs")
+	gitCommand(t, dir, env, "commit", "-qm", "base")
+	gitCommand(t, dir, env, "add", "internal")
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"customScopes":["deps"],"messagePrompt":false}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// From a subdirectory: suggestions still come from the whole repository.
+	cmd := helperCommand("prototype", "--format=standard", "--type=fix", "--title=fix selector")
+	cmd.Dir = filepath.Join(dir, "docs")
+	s := startTerminal(t, cmd)
+	s.answer(t, "Choose a commit type", "\r")
+	s.answer(t, "ui           staged · 2 files", "\x1b[B\r")
+	s.answer(t, "Enter the commit title", "\r")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 0)
+	text := ansi.Strip(s.text())
+	if got := s.stdout.String(); got != "fix(ui): fix selector\n" || !strings.Contains(text, "deps         saved") || !strings.Contains(text, "Custom scope") {
+		t.Fatalf("scope suggestions: %q / %q", got, text)
+	}
+	if gitCommand(t, dir, env, "diff", "--cached", "--name-only") != "internal/ui/a.go\ninternal/ui/b.go\n" {
+		t.Fatal("suggestions changed the staging")
+	}
+}
+
 func TestAccessibleTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--accessible"))
 	s.answer(t, "Choose a format", "\x1b[B\x1b[B\r")
 	s.answer(t, "Choose a commit type", "\x1b[B\x1b[B\r")
 	s.answer(t, "Choose an emoji", "/memo\r")
-	s.answer(t, "Scope", "\n")
+	s.answer(t, "Choose a scope", "\r")
 	s.answer(t, "Enter the commit title", "update guide\r")
 	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\n")
@@ -280,7 +315,8 @@ func TestAccessibleTerminal(t *testing.T) {
 	s = startTerminal(t, helperCommand("prototype", "--accessible"))
 	s.answer(t, "Choose a format", "\r")
 	s.answer(t, "Choose a commit type", "\r")
-	s.answer(t, "Scope", "\x04")
+	s.answer(t, "Choose a scope", "\r")
+	s.answer(t, "Enter the commit title", "\x04")
 	s.finish(t, 1)
 	if s.stdout.Len() != 0 || !strings.Contains(ansi.Strip(s.text()), "EOF") {
 		t.Fatal("EOF did not report a read error without publishing a message")
@@ -330,7 +366,7 @@ func TestPreferenceTerminalCancellation(t *testing.T) {
 func TestExplicitFormatAndHookConversion(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--format=standard", "--type=docs", "--scope=api", "--title=update README", "--message=  body\n\nSigned-off-by: Ana\n"))
 	s.answer(t, "Choose a commit type", "\r")
-	s.answer(t, "Scope", "\r")
+	s.answer(t, "Choose a scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\r")
@@ -340,7 +376,7 @@ func TestExplicitFormatAndHookConversion(t *testing.T) {
 	}
 	s = startTerminal(t, helperCommand("prototype", "--format=emoji", "--emoji=:memo:", "--title=update README"))
 	s.answer(t, "Choose an emoji", "\r")
-	s.answer(t, "Scope", "\r")
+	s.answer(t, "Choose a scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "\r")
 	s.answer(t, "Finish", "y\r")
@@ -356,7 +392,7 @@ func TestExplicitFormatAndHookConversion(t *testing.T) {
 	s = startTerminal(t, helperCommand("prototype", "--hook", path, "message", "--format=hybrid", "--type=docs", "--accessible"))
 	s.answer(t, "Choose a commit type", "\r")
 	s.answer(t, "Choose an emoji", "\r")
-	s.answer(t, "Scope", "\r")
+	s.answer(t, "Choose a scope", "\r")
 	s.answer(t, "Enter the commit title", "\r")
 	s.answer(t, "Body (optional)", "converted details\r")
 	s.answer(t, "Finish", "y\r")
@@ -400,6 +436,7 @@ func TestPreferenceTerminal(t *testing.T) {
 	s.answer(t, "Emoji format", "code\n")
 	s.answer(t, "Capitalize", "n\n")
 	s.answer(t, "Scope prompt", "false\n")
+	s.answer(t, "Saved custom scopes", "\n")
 	s.answer(t, "Prompt for a message body", "n\n")
 	s.answer(t, "Body editor", "\n")
 	s.answer(t, "Catalog URL", "\n")

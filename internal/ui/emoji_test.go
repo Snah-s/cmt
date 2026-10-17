@@ -22,7 +22,7 @@ func TestEmojiTypeAhead(t *testing.T) {
 		{"compiler warnings", ":rotating_light:"},
 	} {
 		t.Run(test.query, func(t *testing.T) {
-			owner := newCommitForm(testCatalog(t), Draft{Mode: "emoji", Emoji: ":art:"}, Options{FormatExplicit: true})
+			owner := newCommitForm(testCatalog(t), Draft{Mode: "emoji", Emoji: ":art:"}, Options{FormatExplicit: true, HideScope: true})
 			selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 			selector.Update(tea.KeyPressMsg{Code: 's', Text: test.query})
 			if got, _ := selector.emojis.hovered(); got != test.code {
@@ -40,7 +40,7 @@ func TestEmojiTypeAhead(t *testing.T) {
 }
 
 func TestEmojiSearchEditingAndCancellation(t *testing.T) {
-	owner := newCommitForm(testCatalog(t), Draft{Mode: "emoji", Emoji: ":art:"}, Options{FormatExplicit: true})
+	owner := newCommitForm(testCatalog(t), Draft{Mode: "emoji", Emoji: ":art:"}, Options{FormatExplicit: true, HideScope: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.PasteMsg{Content: "📝\n"})
 	if selector.emojis.query != "📝" {
@@ -73,7 +73,7 @@ func TestEmojiSearchEditingAndCancellation(t *testing.T) {
 }
 
 func TestEmojiWheel(t *testing.T) {
-	owner := newCommitForm(testCatalog(t), Draft{Mode: "emoji"}, Options{FormatExplicit: true})
+	owner := newCommitForm(testCatalog(t), Draft{Mode: "emoji"}, Options{FormatExplicit: true, HideScope: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	s := selector.emojis
 	rows := func() []string {
@@ -104,7 +104,7 @@ func TestEmojiWheel(t *testing.T) {
 }
 
 func TestEmojiHybridSearchAndSmallWindow(t *testing.T) {
-	owner := newCommitForm(testCatalog(t), Draft{Mode: "hybrid", Type: "docs"}, Options{FormatExplicit: true})
+	owner := newCommitForm(testCatalog(t), Draft{Mode: "hybrid", Type: "docs"}, Options{FormatExplicit: true, HideScope: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	selector.Update(tea.PasteMsg{Content: "bug"})
@@ -132,7 +132,7 @@ func TestEmojiSearchKeepsWindowHeight(t *testing.T) {
 		for _, height := range []int{0, 3, 5, 40} {
 			c := all
 			c.Entries = c.Entries[:size]
-			owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{FormatExplicit: true})
+			owner := newCommitForm(c, Draft{Mode: "emoji"}, Options{FormatExplicit: true, HideScope: true})
 			s := owner.inlineSelector(strings.NewReader(""), io.Discard).emojis
 			initial := strings.Count(s.view(160, height), "\n") + 1
 			if height > 0 && initial > height {

@@ -211,6 +211,24 @@ func (r Repo) RemoveHook(ctx context.Context) error {
 	return os.Remove(path)
 }
 
+// StagedPaths lists the files in the index that differ from HEAD, relative to the top level.
+func (r Repo) StagedPaths(ctx context.Context) ([]string, error) {
+	return r.paths(ctx, "diff", "--cached", "--name-only", "-z")
+}
+
+// TrackedPaths lists every tracked file, relative to the top level even from a subdirectory.
+func (r Repo) TrackedPaths(ctx context.Context) ([]string, error) {
+	return r.paths(ctx, "ls-files", "-z", "--full-name", "--", ":/")
+}
+
+func (r Repo) paths(ctx context.Context, args ...string) ([]string, error) {
+	out, err := r.capture(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return strings.FieldsFunc(out, func(c rune) bool { return c == 0 }), nil
+}
+
 func (r Repo) RebaseActive(ctx context.Context) (bool, error) {
 	for _, name := range []string{"rebase-merge", "rebase-apply"} {
 		path, err := r.capture(ctx, "rev-parse", "--path-format=absolute", "--git-path", name)

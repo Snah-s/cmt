@@ -281,3 +281,30 @@ func TestEditorPreference(t *testing.T) {
 		}
 	}
 }
+
+func TestScopeDefaultsAndCustomScopes(t *testing.T) {
+	if !Defaults().ScopePrompt {
+		t.Fatal("the scope question must be on by default")
+	}
+	if p, err := Parse([]byte(`{}`), true); err != nil || p.ScopePrompt {
+		t.Fatalf("legacy gitmoji-cli profiles keep the scope question off: %+v %v", p, err)
+	}
+	if p, err := Parse([]byte(`{"scopePrompt":false}`), false); err != nil || p.ScopePrompt {
+		t.Fatalf("a saved false must win over the new default: %+v %v", p, err)
+	}
+	p, err := Defaults().Set([]string{`customScopes=["auth","deps"]`})
+	if err != nil || len(p.CustomScopes) != 2 || p.Scopes != nil {
+		t.Fatalf("custom scopes must not become the strict list: %+v %v", p, err)
+	}
+	if data, err := p.JSON(); err != nil || !bytes.Contains(data, []byte(`"customScopes"`)) {
+		t.Fatalf("saved custom scopes: %s %v", data, err)
+	}
+	if data, err := Defaults().JSON(); err != nil || bytes.Contains(data, []byte("customScopes")) {
+		t.Fatalf("empty custom scopes were saved: %s %v", data, err)
+	}
+	for _, data := range []string{`{"customScopes":"auth"}`, `{"customScopes":null}`, `{"customScopes":[null]}`, `{"customScopes":["Auth"]}`, `{"customScopes":["two words"]}`} {
+		if _, err := Parse([]byte(data), false); err == nil {
+			t.Fatalf("accepted %s", data)
+		}
+	}
+}

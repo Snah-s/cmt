@@ -28,10 +28,13 @@ type commitForm struct {
 type Options struct {
 	FormatExplicit      bool
 	HideScope, HideBody bool
-	Scopes              []string
-	MessageOptions      commit.Options
-	ConfirmDescription  string
-	Editor              string
+	// Scopes is the project's strict list; nil enables detection from the paths and CustomScopes.
+	Scopes                    []string
+	CustomScopes              []string
+	StagedPaths, TrackedPaths []string
+	MessageOptions            commit.Options
+	ConfirmDescription        string
+	Editor                    string
 }
 
 func newCommitForm(c catalog.Catalog, draft Draft, options Options) *commitForm {
@@ -65,14 +68,6 @@ func (m *commitForm) message() commit.Message {
 	return commit.Preview(m.draft, m.catalog, m.options.MessageOptions)
 }
 
-func (m *commitForm) scopeChoices() []string {
-	choices := slices.Clone(m.options.Scopes)
-	if m.draft.Scope != "" && !slices.Contains(choices, m.draft.Scope) {
-		choices = append(choices, m.draft.Scope)
-	}
-	return choices
-}
-
 func (m *commitForm) previewStatus() string {
 	return "Preview · " + titleCounter(m.message().TitleLength)
 }
@@ -89,14 +84,6 @@ func reconcile(d *Draft, c catalog.Catalog) {
 	if d.Mode == "standard" || (d.Mode == "hybrid" && !c.Compatible(d.Type, d.Emoji)) {
 		d.Emoji = ""
 	}
-}
-
-func (m *commitForm) textFields(r *lineReader, output io.Writer) error {
-	run := func(field huh.Field) error { return accessibleField(r, output, field) }
-	if !m.options.HideScope && m.options.Scopes == nil {
-		return run(huh.NewInput().Title("Scope (optional)").Value(&m.draft.Scope).Validate(commit.ValidateScope))
-	}
-	return nil
 }
 
 func (m *commitForm) confirmFields(r *lineReader, output io.Writer) error {

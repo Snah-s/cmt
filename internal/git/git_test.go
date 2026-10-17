@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -435,5 +436,28 @@ func TestHooksPathWorktreeAndRebase(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(linked, "worktree hooks", "prepare-commit-msg")); err != nil {
 		t.Fatalf("linked relative hooksPath: %v", err)
+	}
+}
+
+func TestStagedAndTrackedPaths(t *testing.T) {
+	r := testRepo(t)
+	write(t, filepath.Join(r.Dir, "internal", "ui", "form.go"), "a", 0600)
+	write(t, filepath.Join(r.Dir, "docs", "guide with spaces.md"), "a", 0600)
+	command(t, r.Dir, "add", ".")
+	command(t, r.Dir, "commit", "-qm", "base")
+	write(t, filepath.Join(r.Dir, "internal", "ui", "form.go"), "b", 0600)
+	write(t, filepath.Join(r.Dir, "README.md"), "new", 0600)
+	command(t, r.Dir, "add", "internal/ui/form.go")
+	sub, err := Open(context.Background(), filepath.Join(r.Dir, "docs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := sub.StagedPaths(context.Background())
+	if err != nil || !slices.Equal(staged, []string{"internal/ui/form.go"}) {
+		t.Fatalf("staged from a subdirectory: %q %v", staged, err)
+	}
+	tracked, err := sub.TrackedPaths(context.Background())
+	if err != nil || !slices.Equal(tracked, []string{"docs/guide with spaces.md", "internal/ui/form.go"}) {
+		t.Fatalf("tracked from a subdirectory: %q %v", tracked, err)
 	}
 }

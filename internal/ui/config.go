@@ -37,6 +37,14 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 		return p, err
 	}
 	scopeText := string(encoded)
+	custom := "[]"
+	if p.CustomScopes != nil {
+		data, err := json.Marshal(p.CustomScopes)
+		if err != nil {
+			return p, err
+		}
+		custom = string(data)
+	}
 	confirmed := false
 	fields := []huh.Field{
 		huh.NewInput().Title("Commit format (standard/emoji/hybrid)").Value(&p.CommitFormat).Validate(func(value string) error {
@@ -53,6 +61,13 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 				value = scopeText
 			}
 			_, err := p.Set([]string{"scopePrompt=" + value})
+			return err
+		}),
+		huh.NewInput().Title("Saved custom scopes (JSON array, suggested with detected ones)").Value(&custom).Validate(func(value string) error {
+			if value == "" {
+				value = custom
+			}
+			_, err := p.Set([]string{"customScopes=" + value})
 			return err
 		}),
 		huh.NewConfirm().Title("Prompt for a message body?").Value(&p.MessagePrompt),
@@ -72,7 +87,7 @@ func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.
 	if !confirmed {
 		return p, ErrCanceled
 	}
-	return p.Set([]string{"scopePrompt=" + scopeText})
+	return p.Set([]string{"scopePrompt=" + scopeText, "customScopes=" + custom})
 }
 
 func quoteDefault(value, fallback string) string {

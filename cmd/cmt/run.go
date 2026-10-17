@@ -197,7 +197,17 @@ func run(ctx context.Context, args []string) int {
 		confirmation = "Saves the message file; Git continues the commit."
 	}
 	if interactive {
-		draft, err = ui.Run(ctx, input, output, c, draft, ui.Options{FormatExplicit: o.FormatSet, HideScope: !p.ScopePrompt, HideBody: !p.MessagePrompt, Scopes: p.Scopes, MessageOptions: messageOptions, ConfirmDescription: confirmation, Editor: ui.FindEditor(p.Editor)})
+		var staged, tracked []string
+		if p.ScopePrompt && p.Scopes == nil {
+			// Scope suggestions are optional: outside a repository or on a Git error there are none.
+			if scopeRepo, err := gitclient.Open(ctx, cwd); err == nil {
+				staged, _ = scopeRepo.StagedPaths(ctx)
+				tracked, _ = scopeRepo.TrackedPaths(ctx)
+			}
+		}
+		draft, err = ui.Run(ctx, input, output, c, draft, ui.Options{FormatExplicit: o.FormatSet, HideScope: !p.ScopePrompt, HideBody: !p.MessagePrompt,
+			Scopes: p.Scopes, CustomScopes: p.CustomScopes, StagedPaths: staged, TrackedPaths: tracked,
+			MessageOptions: messageOptions, ConfirmDescription: confirmation, Editor: ui.FindEditor(p.Editor)})
 		if errors.Is(err, ui.ErrCanceled) {
 			if o.Command == "hook" {
 				fmt.Fprintln(os.Stderr, "Canceled; the original message was preserved and Git may continue.")

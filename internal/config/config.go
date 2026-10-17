@@ -22,6 +22,7 @@ import (
 type Preferences struct {
 	ScopePrompt     bool
 	Scopes          []string
+	CustomScopes    []string
 	MessagePrompt   bool
 	EmojiFormat     string
 	CapitalizeTitle bool
@@ -38,7 +39,7 @@ type Resolved struct {
 }
 
 func Defaults() Preferences {
-	return Preferences{MessagePrompt: true, EmojiFormat: "emoji", CapitalizeTitle: true,
+	return Preferences{ScopePrompt: true, MessagePrompt: true, EmojiFormat: "emoji", CapitalizeTitle: true,
 		CatalogURL: "https://gitmoji.dev/api/gitmojis", CommitFormat: "standard"}
 }
 
@@ -49,7 +50,8 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 		return p, err
 	}
 	if legacy {
-		p.CommitFormat = "emoji"
+		// gitmoji-cli defaults: emoji titles and no scope question.
+		p.CommitFormat, p.ScopePrompt = "emoji", false
 		if value, ok := fields["gitmojisUrl"]; ok {
 			if _, exists := fields["catalogUrl"]; !exists {
 				fields["catalogUrl"] = value
@@ -75,21 +77,15 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 			target = &p.CommitFormat
 		case "editor":
 			target = &p.Editor
+		case "customScopes":
+			if p.CustomScopes, err = scopeList(key, value); err != nil {
+				return p, err
+			}
+			continue
 		case "scopePrompt":
 			if bytes.HasPrefix(value, []byte("[")) {
-				if err := json.Unmarshal(value, &p.Scopes); err != nil {
-					return p, fmt.Errorf("scopePrompt: expected a boolean or array of strings: %w", err)
-				}
-				// Unmarshal accepts null string elements; check their JSON types as well.
-				var entries []json.RawMessage
-				_ = json.Unmarshal(value, &entries)
-				for i, scope := range p.Scopes {
-					if bytes.Equal(entries[i], []byte("null")) || scope == "" {
-						return p, errors.New("scopePrompt: scopes must be nonempty strings")
-					}
-					if err := commit.ValidateScope(scope); err != nil {
-						return p, fmt.Errorf("scopePrompt: %w", err)
-					}
+				if p.Scopes, err = scopeList(key, value); err != nil {
+					return p, err
 				}
 				p.ScopePrompt = true
 				continue
@@ -123,6 +119,26 @@ func Parse(data []byte, legacy bool) (Preferences, error) {
 	return p, nil
 }
 
+// scopeList reads a JSON array of valid, nonempty scopes.
+func scopeList(key string, value json.RawMessage) ([]string, error) {
+	var scopes []string
+	if err := json.Unmarshal(value, &scopes); err != nil || scopes == nil {
+		return nil, fmt.Errorf("%s: expected an array of strings", key)
+	}
+	// Unmarshal accepts null string elements; check their JSON types as well.
+	var entries []json.RawMessage
+	_ = json.Unmarshal(value, &entries)
+	for i, scope := range scopes {
+		if bytes.Equal(entries[i], []byte("null")) || scope == "" {
+			return nil, fmt.Errorf("%s: scopes must be nonempty strings", key)
+		}
+		if err := commit.ValidateScope(scope); err != nil {
+			return nil, fmt.Errorf("%s: %w", key, err)
+		}
+	}
+	return scopes, nil
+}
+
 func object(data []byte) (map[string]json.RawMessage, error) {
 	if len(data) > 1<<20 || !utf8.Valid(data) {
 		return nil, errors.New("JSON must be valid UTF-8 and at most 1 MiB")
@@ -152,6 +168,9 @@ func (p Preferences) JSON() ([]byte, error) {
 	fields["scopePrompt"] = p.ScopePrompt
 	if p.Scopes != nil {
 		fields["scopePrompt"] = p.Scopes
+	}
+	if len(p.CustomScopes) > 0 {
+		fields["customScopes"] = p.CustomScopes
 	}
 	return json.MarshalIndent(fields, "", "  ")
 }
@@ -289,7 +308,7 @@ func (p Preferences) Set(assignments []string) (Preferences, error) {
 			return p, fmt.Errorf("--set: expected KEY=JSON, got %q", assignment)
 		}
 		switch key {
-		case "scopePrompt", "messagePrompt", "emojiFormat", "capitalizeTitle", "catalogUrl", "commitFormat", "editor":
+		case "scopePrompt", "messagePrompt", "emojiFormat", "capitalizeTitle", "catalogUrl", "commitFormat", "editor", "customScopes":
 			fields[key] = json.RawMessage(value)
 		default:
 			return p, fmt.Errorf("--set: unknown preference %q", key)

@@ -43,7 +43,7 @@ func press(model tea.Model, keys ...rune) {
 	}
 }
 
-// fill drives the selectors with keys, the scope and confirmation with lines, and types title and body.
+// fill drives the selectors (scope included) with keys, the confirmation with lines, and types title and body.
 func fill(t *testing.T, m *commitForm, lines, title, body string, keys ...rune) (Draft, string, error) {
 	t.Helper()
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
@@ -54,9 +54,6 @@ func fill(t *testing.T, m *commitForm, lines, title, body string, keys ...rune) 
 	var output bytes.Buffer
 	output.WriteString(strings.Join(selector.answers, "\n") + "\n")
 	r := &lineReader{reader: strings.NewReader(lines)}
-	if err := m.textFields(r, &output); err != nil {
-		return Draft{}, output.String(), err
-	}
 	prompt := m.newTitlePrompt()
 	press(prompt, append([]rune(title), tea.KeyEnter)...)
 	if !prompt.done {
@@ -102,8 +99,8 @@ func TestPreferencePromptsAndPreview(t *testing.T) {
 }
 
 func TestAccessibleConfiguration(t *testing.T) {
-	p, err := Configure(context.Background(), strings.NewReader("hybrid\ncode\nn\n[\"api\",\"cli\"]\nn\nnvim\n\ny\n"), io.Discard, config.Defaults())
-	if err != nil || p.CommitFormat != "hybrid" || p.EmojiFormat != "code" || p.CapitalizeTitle || p.MessagePrompt || !p.ScopePrompt || len(p.Scopes) != 2 || p.Editor != "nvim" {
+	p, err := Configure(context.Background(), strings.NewReader("hybrid\ncode\nn\n[\"api\",\"cli\"]\n[\"deps\"]\nn\nnvim\n\ny\n"), io.Discard, config.Defaults())
+	if err != nil || p.CommitFormat != "hybrid" || p.EmojiFormat != "code" || p.CapitalizeTitle || p.MessagePrompt || !p.ScopePrompt || len(p.Scopes) != 2 || !slices.Equal(p.CustomScopes, []string{"deps"}) || p.Editor != "nvim" {
 		t.Fatalf("configuration: %+v %v", p, err)
 	}
 	if _, err := Configure(context.Background(), strings.NewReader(""), io.Discard, config.Defaults()); !errors.Is(err, io.EOF) {
@@ -117,7 +114,7 @@ func TestPreviewAndTypeChange(t *testing.T) {
 	if got := commit.Preview(d, c, commit.DefaultOptions()).Text; got != "feat(users): ✨ add résumé search\n\nfirst paragraph\n\nSigned-off-by: Ana" {
 		t.Fatalf("preview: %q", got)
 	}
-	m := newCommitForm(c, d, Options{FormatExplicit: true})
+	m := newCommitForm(c, d, Options{FormatExplicit: true, HideScope: true})
 	selector := m.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -199,15 +196,16 @@ func TestModesAndTextEOF(t *testing.T) {
 			if mode != "standard" {
 				keys = append(append(keys, []rune(":memo:")...), tea.KeyEnter)
 			}
+			keys = append(keys, tea.KeyEnter) // Skip scope
 			m := newCommitForm(c, Draft{}, Options{})
-			d, output, err := fill(t, m, "\ny\n", "update guide", "first paragraph", keys...)
+			d, output, err := fill(t, m, "y\n", "update guide", "first paragraph", keys...)
 			if err != nil || d.Mode != mode || d.Body != "first paragraph" || !strings.Contains(output, m.message().Text) ||
 				(mode != "emoji" && d.Type != "docs") || (mode != "standard" && d.Emoji != ":memo:") {
 				t.Fatalf("mode answers: %+v %v / %q", d, err, output)
 			}
 		})
 	}
-	if err := newCommitForm(c, Draft{}, Options{}).textFields(&lineReader{reader: strings.NewReader("")}, io.Discard); !errors.Is(err, io.EOF) {
+	if err := newCommitForm(c, Draft{Description: "update guide"}, Options{}).confirmFields(&lineReader{reader: strings.NewReader("")}, io.Discard); !errors.Is(err, io.EOF) {
 		t.Fatalf("text EOF: %v", err)
 	}
 	if err := newCommitForm(c, Draft{Description: "update guide"}, Options{}).confirmFields(&lineReader{reader: strings.NewReader("n\n")}, io.Discard); !errors.Is(err, ErrCanceled) {
@@ -234,7 +232,7 @@ func TestInlineEmojiInitialSelection(t *testing.T) {
 }
 
 func TestInlineSelectorStagesReuseOneCompactList(t *testing.T) {
-	owner := newCommitForm(testCatalog(t), Draft{}, Options{})
+	owner := newCommitForm(testCatalog(t), Draft{}, Options{HideScope: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.form.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	if view := ansi.Strip(selector.View().Content); len(strings.Split(view, "\n")) != 4 {
@@ -298,11 +296,7 @@ func TestConfirmationDescription(t *testing.T) {
 	const description = "Creates a Git commit from the index."
 	m := newCommitForm(testCatalog(t), Draft{Mode: "standard", Type: "docs", Description: "update guide"}, Options{HideScope: true, HideBody: true, ConfirmDescription: description})
 	var output bytes.Buffer
-	r := &lineReader{reader: strings.NewReader("y\n")}
-	if err := m.textFields(r, &output); err != nil {
-		t.Fatal(err)
-	}
-	if err := m.confirmFields(r, &output); err != nil {
+	if err := m.confirmFields(&lineReader{reader: strings.NewReader("y\n")}, &output); err != nil {
 		t.Fatal(err)
 	}
 	text := output.String()
@@ -320,7 +314,7 @@ func TestEmptyHybridCategory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := newCommitForm(c, Draft{Mode: "hybrid"}, Options{FormatExplicit: true})
+	owner := newCommitForm(c, Draft{Mode: "hybrid"}, Options{FormatExplicit: true, HideScope: true})
 	selector := owner.inlineSelector(strings.NewReader(""), io.Discard)
 	selector.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if selector.step != "type" || owner.draft.Emoji != "" || !strings.Contains(ansi.Strip(selector.View().Content), "no classified emojis") {

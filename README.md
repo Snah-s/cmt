@@ -33,6 +33,13 @@ limit. The whole title is counted as commitlint does (an emoji such as 🐛 coun
 the counter turns yellow over 72 and red over 100, which is rejected.
 In a terminal, review the prompts and confirm before committing.
 
+The scope selector suggests the modules of your staged files (`internal/ui/x.go`
+suggests `ui`), your saved `customScopes` and the main folders; type to filter
+it, or choose "Custom scope…" to write one. Save your own suggestions with
+`config --set 'customScopes=["auth","deps"]'`. A project list in `scopePrompt`
+(`["api","cli"]`) is strict and replaces the suggestions; `scopePrompt=false`
+hides the question.
+
 Type directly in the emoji selector to search names, codes and descriptions.
 Exact matches come first; abbreviations and simple typos also match. Use ↑/↓
 to scroll the circular list, Enter to select, and Esc to clear search or cancel.
