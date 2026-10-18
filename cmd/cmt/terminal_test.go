@@ -399,6 +399,40 @@ func TestRecoverMessageInHook(t *testing.T) {
 	}
 }
 
+func TestBodyEditorInHook(t *testing.T) {
+	dir, env := phase4Repo(t)
+	editor := filepath.Join(t.TempDir(), "editor with spaces")
+	// The hook reads the controlling terminal, not its stdin: the editor must still get a TTY.
+	script := "#!/bin/sh\n[ -t 0 ] && [ -t 1 ] || exit 9\nprintf 'written in the editor\\n\\nRefs: #42\\n' > \"$1\"\n"
+	if err := os.WriteFile(editor, []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	config, err := json.Marshal(map[string]any{"editor": editor, "scopePrompt": false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), config, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte("base"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitCommand(t, dir, env, "add", "file")
+	nativeCommand(t, dir, env, 0, "init")
+	cmd := exec.Command("git", "commit")
+	cmd.Dir, cmd.Env = dir, env
+	s := startTerminal(t, cmd)
+	s.answer(t, "Choose a format", "\r")
+	s.answer(t, "Choose a commit type", "\r")
+	s.answer(t, "Enter the commit title", "edit body in hook\r")
+	s.answer(t, "Ctrl+O: write it in editor with spaces", "\x0f")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 0)
+	if message := gitCommand(t, dir, env, "log", "-1", "--format=%B"); message != "feat: edit body in hook\n\nwritten in the editor\n\nRefs: #42\n\n" { // Git's cleanup ends the message with a newline
+		t.Fatalf("hook editor body: %q / %q", message, ansi.Strip(s.text()))
+	}
+}
+
 func TestAccessibleTerminal(t *testing.T) {
 	s := startTerminal(t, helperCommand("prototype", "--accessible"))
 	s.answer(t, "Choose a format", "\x1b[B\x1b[B\r")
