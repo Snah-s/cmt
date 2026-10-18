@@ -461,3 +461,27 @@ func TestStagedAndTrackedPaths(t *testing.T) {
 		t.Fatalf("tracked from a subdirectory: %q %v", tracked, err)
 	}
 }
+
+func TestDraftPathAndHead(t *testing.T) {
+	ctx := context.Background()
+	r := testRepo(t)
+	if head, err := r.Head(ctx); err != nil || head != "" {
+		t.Fatalf("unborn branch: %q %v", head, err)
+	}
+	write(t, filepath.Join(r.Dir, "file"), "a", 0600)
+	command(t, r.Dir, "add", ".")
+	command(t, r.Dir, "commit", "-qm", "base")
+	if head, err := r.Head(ctx); err != nil || head != command(t, r.Dir, "rev-parse", "HEAD") {
+		t.Fatalf("head: %q %v", head, err)
+	}
+	main, err := r.DraftPath(ctx)
+	if err != nil || filepath.Dir(main) != filepath.Join(r.Dir, ".git") {
+		t.Fatalf("draft path: %q %v", main, err)
+	}
+	linked := filepath.Join(t.TempDir(), "linked")
+	command(t, r.Dir, "worktree", "add", "-q", linked)
+	other, err := Repo{Dir: linked}.DraftPath(ctx)
+	if err != nil || other == main {
+		t.Fatalf("each worktree needs its own draft: %q / %q %v", other, main, err)
+	}
+}

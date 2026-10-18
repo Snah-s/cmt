@@ -49,6 +49,10 @@ Press Ctrl+O there to write the body in an editor: the `editor` preference
 (`config --set 'editor="nvim"'`), or else the first installed of nano, micro,
 nvim, vim, hx and vi. Saving an empty file removes the body; an editor error keeps it.
 Without a terminal, complete arguments authorize the commit directly.
+If the commit fails after you confirm the message (a pre-commit hook, the
+signature…), the message is kept: the next `cmt commit`, or `git commit` with the
+hook, asks `Reuse it? [Y/n]` and fills every prompt with it. It is stored in the
+repository's Git directory, never committed, and dropped once a commit succeeds.
 Only changes already staged with `git add` are committed, including partial
 selections. cmt never stages untracked files or unstaged changes. The retired
 `autoAdd` preference in older profiles is ignored.

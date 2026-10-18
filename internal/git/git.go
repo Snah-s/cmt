@@ -229,6 +229,21 @@ func (r Repo) paths(ctx context.Context, args ...string) ([]string, error) {
 	return strings.FieldsFunc(out, func(c rune) bool { return c == 0 }), nil
 }
 
+// DraftPath is where cmt keeps an unfinished message for this worktree; Git never commits it.
+func (r Repo) DraftPath(ctx context.Context) (string, error) {
+	return r.capture(ctx, "rev-parse", "--path-format=absolute", "--git-path", "cmt-draft.json")
+}
+
+// Head returns the current commit, or "" before the first one.
+func (r Repo) Head(ctx context.Context) (string, error) {
+	head, err := r.capture(ctx, "rev-parse", "--verify", "--quiet", "HEAD")
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return "", nil
+	}
+	return head, err
+}
+
 func (r Repo) RebaseActive(ctx context.Context) (bool, error) {
 	for _, name := range []string{"rebase-merge", "rebase-apply"} {
 		path, err := r.capture(ctx, "rev-parse", "--path-format=absolute", "--git-path", name)

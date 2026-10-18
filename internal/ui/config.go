@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 
 	"charm.land/huh/v2"
@@ -25,6 +26,16 @@ func ConfirmImport(ctx context.Context, input io.Reader, output io.Writer) (bool
 	confirmed := false
 	err := preferenceForm(ctx, input, output, huh.NewConfirm().Title("Import these legacy preferences?").Description("Writes a new native profile; preserves the original.").Value(&confirmed))
 	return confirmed, err
+}
+
+// ConfirmReuse offers the message of a commit that did not happen; Enter accepts it.
+func ConfirmReuse(ctx context.Context, input io.Reader, output io.Writer, title string) (bool, error) {
+	if _, err := fmt.Fprintf(output, "A message did not reach a commit:\n  %s\n", title); err != nil {
+		return false, err
+	}
+	reuse := true
+	err := preferenceForm(ctx, input, output, huh.NewConfirm().Title("Reuse it?").Value(&reuse))
+	return reuse, err
 }
 
 func Configure(ctx context.Context, input io.Reader, output io.Writer, p config.Preferences) (config.Preferences, error) {

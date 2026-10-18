@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -293,6 +294,108 @@ func TestScopeSuggestionsTerminal(t *testing.T) {
 	}
 	if gitCommand(t, dir, env, "diff", "--cached", "--name-only") != "internal/ui/a.go\ninternal/ui/b.go\n" {
 		t.Fatal("suggestions changed the staging")
+	}
+}
+
+func TestRecoverMessageAfterFailedCommit(t *testing.T) {
+	dir, env := phase4Repo(t)
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"scopePrompt":false}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "feature"), []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitCommand(t, dir, env, "add", "feature")
+	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nexit 1\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "commit", "--format=standard")
+	cmd.Dir, cmd.Env = dir, env
+	s := startTerminal(t, cmd)
+	s.answer(t, "Choose a commit type", "\x1b[B\r")
+	s.answer(t, "Enter the commit title", "keep my message\r")
+	s.answer(t, "Body (optional)", "a long explanation\r")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 1)
+	if !strings.Contains(ansi.Strip(s.text()), "Message saved; run cmt commit again to reuse it.") {
+		t.Fatalf("failure did not mention the saved message: %q", ansi.Strip(s.text()))
+	}
+	if err := os.Remove(hook); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.Command(os.Args[0], "commit", "--format=standard")
+	cmd.Dir, cmd.Env = dir, env
+	s = startTerminal(t, cmd)
+	s.answer(t, "Reuse it?", "\n")
+	s.answer(t, "Choose a commit type", "\r")
+	s.answer(t, "Enter the commit title", "\r")
+	s.answer(t, "Body (optional)", "\r")
+	s.answer(t, "Finish", "y\r")
+	s.finish(t, 0)
+	text := ansi.Strip(s.text())
+	if message := gitCommand(t, dir, env, "log", "-1", "--format=%B"); message != "fix: keep my message\n\na long explanation\n" || !strings.Contains(text, "fix: keep my message") {
+		t.Fatalf("reused message: %q / %q", message, text)
+	}
+	if gitCommand(t, dir, env, "diff", "--cached", "--name-only") != "" {
+		t.Fatal("the staged change was not committed")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git", "cmt-draft.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("draft kept after a successful commit: %v", err)
+	}
+}
+
+func TestRecoverMessageInHook(t *testing.T) {
+	dir, env := phase4Repo(t)
+	env = append(env, "ACCESSIBLE=1")
+	if err := os.WriteFile(filepath.Join(dir, ".cmtrc.json"), []byte(`{"scopePrompt":false,"messagePrompt":false}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte("base"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitCommand(t, dir, env, "add", "file")
+	nativeCommand(t, dir, env, 0, "init")
+	commitMsg := filepath.Join(dir, ".git", "hooks", "commit-msg")
+	if err := os.WriteFile(commitMsg, []byte("#!/bin/sh\nexit 1\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "commit")
+	cmd.Dir, cmd.Env = dir, env
+	s := startTerminal(t, cmd)
+	s.answer(t, "Choose a format", "\r")
+	s.answer(t, "Choose a commit type", "\x1b[B\x1b[B\r")
+	s.answer(t, "Enter the commit title", "document the hook\r")
+	s.answer(t, "Finish", "y\n")
+	s.finish(t, 1)
+	if err := os.Remove(commitMsg); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.Command("git", "commit")
+	cmd.Dir, cmd.Env = dir, env
+	s = startTerminal(t, cmd)
+	s.answer(t, "docs: document the hook", "")
+	s.answer(t, "Reuse it?", "\n")
+	s.answer(t, "Choose a format", "\r")
+	s.answer(t, "Choose a commit type", "\r")
+	s.answer(t, "Enter the commit title", "\r")
+	s.answer(t, "Finish", "y\n")
+	s.finish(t, 0)
+	if message := gitCommand(t, dir, env, "log", "-1", "--format=%s"); message != "docs: document the hook\n" {
+		t.Fatalf("hook reuse: %q", message)
+	}
+	// The draft stays after the hook (cmt cannot see Git's result); HEAD moved, so it is no longer offered.
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte("next"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	gitCommand(t, dir, env, "add", "file")
+	cmd = exec.Command("git", "commit")
+	cmd.Dir, cmd.Env = dir, env
+	s = startTerminal(t, cmd)
+	s.answer(t, "Choose a format", "\x03")
+	s.finish(t, 1)
+	if strings.Contains(ansi.Strip(s.text()), "Reuse it?") {
+		t.Fatal("a draft from an earlier HEAD was offered")
 	}
 }
 

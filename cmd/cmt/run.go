@@ -58,6 +58,8 @@ func run(ctx context.Context, args []string) int {
 	input, output := os.Stdin, os.Stderr
 	var hookData []byte
 	var parts commit.HookParts
+	// A pending draft is offered only when the user is about to write a new message.
+	offerDraft := !o.Prototype && (o.Command == "commit" || o.Command == "hook")
 	if o.Command == "hook" {
 		hookData, err = readHook(o.HookFile)
 		if err != nil {
@@ -170,7 +172,9 @@ func run(ctx context.Context, args []string) int {
 			return 0
 		}
 		draft = o.Defaults(parsed)
+		offerDraft = offerDraft && parsed.Description == "" && o.HookSource != "message" && o.HookSource != "squash"
 	}
+	offerDraft = offerDraft && !o.TitleSet && !o.TypeSet && !o.EmojiSet && !o.ScopeSet && !o.BodySet && !o.BreakingSet
 	interactive := term.IsTerminal(input.Fd()) && term.IsTerminal(output.Fd())
 	confirmation := "Returns the message only; does not create a commit."
 	if !o.Prototype && o.Command == "commit" {
@@ -196,6 +200,40 @@ func run(ctx context.Context, args []string) int {
 	} else if !o.Prototype && o.Command == "hook" {
 		confirmation = "Saves the message file; Git continues the commit."
 	}
+	canceled := func() int {
+		if o.Command == "hook" {
+			fmt.Fprintln(os.Stderr, "Canceled; the original message was preserved and Git may continue.")
+			return 0
+		}
+		fmt.Fprintln(os.Stderr, "Canceled; no commit was created.")
+		return 130
+	}
+	var draftPath, head string
+	if interactive && !o.Prototype {
+		// Recovery is best effort: without a draft path or HEAD the commit still proceeds.
+		if path, err := repo.DraftPath(ctx); err == nil {
+			if head, err = repo.Head(ctx); err == nil {
+				draftPath = path
+			}
+		}
+	}
+	if draftPath != "" && offerDraft {
+		if saved, ok := loadDraft(draftPath, head, c, messageOptions); ok && (!o.FormatSet || saved.Mode == o.Draft.Mode) {
+			reuse, err := ui.ConfirmReuse(ctx, input, output, commit.Preview(saved, c, messageOptions).Title)
+			if errors.Is(err, ui.ErrCanceled) {
+				return canceled()
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+			if reuse {
+				draft = saved
+			} else {
+				_ = os.Remove(draftPath)
+			}
+		}
+	}
 	if interactive {
 		var staged, tracked []string
 		if p.ScopePrompt && p.Scopes == nil {
@@ -209,12 +247,7 @@ func run(ctx context.Context, args []string) int {
 			Scopes: p.Scopes, CustomScopes: p.CustomScopes, StagedPaths: staged, TrackedPaths: tracked,
 			MessageOptions: messageOptions, ConfirmDescription: confirmation, Editor: ui.FindEditor(p.Editor)})
 		if errors.Is(err, ui.ErrCanceled) {
-			if o.Command == "hook" {
-				fmt.Fprintln(os.Stderr, "Canceled; the original message was preserved and Git may continue.")
-				return 0
-			}
-			fmt.Fprintln(os.Stderr, "Canceled; no commit was created.")
-			return 130
+			return canceled()
 		}
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -235,6 +268,15 @@ func run(ctx context.Context, args []string) int {
 	if o.Prototype {
 		return writeText(message.Text)
 	}
+	// Saved before Git runs, so a failing hook, signature or interruption does not lose the message.
+	saved := false
+	if draftPath != "" {
+		if err := saveDraft(draftPath, head, draft); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: the message could not be saved for recovery: %v\n", err)
+		} else {
+			saved = true
+		}
+	}
 	if o.Command == "hook" {
 		if err := replaceHook(o.HookFile, hookData, []byte(parts.WithMessage(message.Text))); err != nil {
 			return gitFailure(err)
@@ -242,7 +284,13 @@ func run(ctx context.Context, args []string) int {
 		return 0
 	}
 	if err := repo.Commit(ctx, message.Text, os.Stdin, os.Stdout, os.Stderr); err != nil {
+		if saved {
+			fmt.Fprintln(os.Stderr, "Message saved; run cmt commit again to reuse it.")
+		}
 		return gitFailure(err)
+	}
+	if saved {
+		_ = os.Remove(draftPath)
 	}
 	return 0
 }
