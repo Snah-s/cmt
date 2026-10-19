@@ -90,8 +90,8 @@ works offline and needs only Git: no Node, npm or npx.
 
 ## [0.1.0-rc.1] - 2026-10-10
 
-First release candidate of the native rewrite, tagged before the project was
-renamed to cmt. It was never published as a release.
+First release candidate of the native rewrite, published as the pre-release
+`commit_tool_1_beta` with a Linux amd64 package, before the project was renamed to cmt.
 
 [1.0.0]: https://github.com/Snah-s/cmt/releases/tag/v1.0.0
-[0.1.0-rc.1]: https://github.com/Snah-s/cmt/tree/v0.1.0-rc.1
+[0.1.0-rc.1]: https://github.com/Snah-s/cmt/releases/tag/v0.1.0-rc.1
