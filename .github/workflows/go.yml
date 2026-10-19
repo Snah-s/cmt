@@ -18,6 +18,8 @@ jobs:
       matrix:
         include:
           - {runner: ubuntu-24.04, os: linux, arch: amd64}
+          - {runner: ubuntu-24.04-arm, os: linux, arch: arm64}
+          - {runner: macos-15, os: darwin, arch: arm64}
     defaults:
       run:
         shell: bash
@@ -34,6 +36,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y gnupg pinentry-tty tmux
+      - name: Install signing and terminal test tools on macOS
+        if: runner.os == 'macOS'
+        run: brew install gnupg tmux
       - name: Verify native platform and formatting
         env:
           TARGET_OS: ${{ matrix.os }}
