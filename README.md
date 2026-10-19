@@ -81,11 +81,10 @@ Node, npm, Yarn and npx are not required. `--version` reports the target, toolch
 revision and commit date; packages built from an uncommitted checkout are marked dirty.
 
 The same Go implementation serves Linux, macOS and Windows, with platform-specific
-terminal access. CI currently targets Linux amd64; other native jobs are deferred.
-Windows controlling terminal access still needs
-implementation and validation; managed hook installation is disabled. Local
-execution has been verified on Linux amd64; other targets require successful
-native CI before being advertised.
+terminal access. CI runs the tests natively on Linux amd64, Linux arm64 and macOS
+arm64, including the packaged executable. macOS amd64 and Windows are only
+cross-built. Windows controlling terminal access still needs implementation and
+validation; managed hook installation is disabled there.
 
 ## Install a Linux package
 
