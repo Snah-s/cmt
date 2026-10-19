@@ -475,7 +475,9 @@ func TestDraftPathAndHead(t *testing.T) {
 		t.Fatalf("head: %q %v", head, err)
 	}
 	main, err := r.DraftPath(ctx)
-	if err != nil || filepath.Dir(main) != filepath.Join(r.Dir, ".git") {
+	// Git reports the real path: macOS temporary directories live behind the /var symlink.
+	dir, _ := filepath.EvalSymlinks(r.Dir)
+	if err != nil || filepath.Dir(main) != filepath.Join(dir, ".git") {
 		t.Fatalf("draft path: %q %v", main, err)
 	}
 	linked := filepath.Join(t.TempDir(), "linked")

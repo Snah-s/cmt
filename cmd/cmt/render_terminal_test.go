@@ -29,7 +29,13 @@ func TestEmojiSelectorScreen(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := t.TempDir()
-			socket := filepath.Join(dir, "tmux.sock")
+			// macOS caps socket paths at 104 bytes and its TMPDIR is long, so the socket lives in /tmp.
+			socketDir, err := os.MkdirTemp("/tmp", "cmt-tmux-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.RemoveAll(socketDir) })
+			socket := filepath.Join(socketDir, "tmux.sock")
 			env := append(testEnvironment(t), "CMT_TEST_PROCESS=1", "TERM=xterm-256color", "ACCESSIBLE=")
 			run := func(args ...string) string {
 				t.Helper()

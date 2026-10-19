@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -130,6 +131,10 @@ func (s *terminalSession) finish(t *testing.T, code int) {
 		t.Fatalf("process does not terminate: %q", ansi.Strip(s.text()))
 	}
 	state, err := term.GetState(s.slave.Fd())
+	if err != nil && runtime.GOOS == "darwin" {
+		// macOS revokes the slave descriptor when the session leader exits; the master reaches the same tty.
+		state, err = term.GetState(s.master.Fd())
+	}
 	if err != nil || !reflect.DeepEqual(state, s.initial) {
 		t.Fatalf("terminal was not restored: %v", err)
 	}
