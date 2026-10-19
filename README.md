@@ -88,7 +88,20 @@ validation; managed hook installation is disabled there.
 
 ## Install a package
 
-Download the package for your system from the
+On Linux (x86-64, ARM64) or macOS on Apple silicon, the install script picks the
+package for your system, verifies its SHA256 checksum and installs `cmt` and its
+man page under `~/.local`, without sudo. Run it again to update:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Snah-s/cmt/main/install.sh | sh
+```
+
+Add `-s -- --version 1.0.0` to pin a version, or `-s -- --prefix /usr/local`
+(with `sudo sh`) to install for every user. `-s -- --uninstall` removes `cmt` and
+its man page and keeps your preferences; first run `cmt remove` in each repository
+where you ran `cmt init`, because their hook calls the removed executable and
+`git commit` would fail there. To install by hand instead, download
+the package for your system from the
 [releases page](https://github.com/Snah-s/cmt/releases): `linux_amd64`,
 `linux_arm64` or `darwin_arm64` (macOS on Apple silicon). From its download
 directory, with `pkg` set to the package name:
