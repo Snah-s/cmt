@@ -55,7 +55,11 @@ jobs:
         if: runner.os != 'Windows'
         run: go test -race ./...
       - name: Build candidate archive
-        run: sh scripts/package.sh dev
+        # A pushed tag such as v1.0.0 names the packages 1.0.0; anything else builds dev.
+        run: |
+          version=dev
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version=${GITHUB_REF_NAME#v}; fi
+          sh scripts/package.sh "$version"
       - name: Verify packaged executable
         run: |
           if command -v sha256sum >/dev/null 2>&1; then

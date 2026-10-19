@@ -73,7 +73,7 @@ while that hook is active; use `git commit` in that workflow.
 Build a candidate package, including dependency licenses and a SHA256 checksum:
 
 ```sh
-sh scripts/package.sh 0.1.0-rc.1
+sh scripts/package.sh 1.0.0
 ```
 
 Packages contain a standalone executable; Git is required for commits and hooks.
@@ -86,26 +86,28 @@ arm64, including the packaged executable. macOS amd64 and Windows are only
 cross-built. Windows controlling terminal access still needs implementation and
 validation; managed hook installation is disabled there.
 
-## Install a Linux package
+## Install a package
 
-Use a package that has passed native execution checks. From its download directory:
+Download the package for your system from the
+[releases page](https://github.com/Snah-s/cmt/releases): `linux_amd64`,
+`linux_arm64` or `darwin_arm64` (macOS on Apple silicon). From its download
+directory, with `pkg` set to the package name:
 
 ```sh
-sha256sum -c cmt_0.1.0-rc.1_linux_amd64.tar.gz.sha256
-tar -xzf cmt_0.1.0-rc.1_linux_amd64.tar.gz
-mkdir -p "$HOME/.local/bin"
-cp cmt_0.1.0-rc.1_linux_amd64/cmt "$HOME/.local/bin/cmt"
-chmod 755 "$HOME/.local/bin/cmt"
-"$HOME/.local/bin/cmt" --version
-command -v cmt
-mkdir -p "$HOME/.local/share/man/man1"
-cp cmt_0.1.0-rc.1_linux_amd64/cmt.1 "$HOME/.local/share/man/man1/cmt.1"
+pkg=cmt_1.0.0_linux_amd64
+sha256sum -c "$pkg.tar.gz.sha256"    # on macOS: shasum -a 256 -c "$pkg.tar.gz.sha256"
+tar -xzf "$pkg.tar.gz"
+mkdir -p "$HOME/.local/bin" "$HOME/.local/share/man/man1"
+cp "$pkg/cmt" "$HOME/.local/bin/cmt"
+cp "$pkg/cmt.1" "$HOME/.local/share/man/man1/cmt.1"
+cmt --version
 ```
 
 Add `$HOME/.local/bin` to PATH if needed. The checksum checks integrity against
-the supplied checksum file; verify the download source too. Keep the complete
-package and license notices when redistributing. Candidates are CI artifacts;
-publication requires accepted native checks and an authorized tag/release.
+the supplied checksum file; verify the download source too. The macOS executable
+is not notarized: if macOS blocks it, run `xattr -d com.apple.quarantine
+"$HOME/.local/bin/cmt"`. Keep the complete package and license notices when
+redistributing. Changes between versions are listed in [CHANGELOG](CHANGELOG.md).
 
 ## Preferences and return to the previous version
 
