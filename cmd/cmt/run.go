@@ -25,7 +25,7 @@ func run(ctx context.Context, args []string) int {
 		return 2
 	}
 	if o.Help {
-		return writeText(cli.Help)
+		return writeText(cli.HelpFor(o))
 	}
 	if o.Version {
 		return writeText(fmt.Sprintf("cmt %s (native, %s/%s, %s, revision %s, commit date %s)", version, runtime.GOOS, runtime.GOARCH, runtime.Version(), revision, buildDate))

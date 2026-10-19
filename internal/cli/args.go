@@ -217,36 +217,3 @@ func (o Options) Defaults(initial commit.Draft) commit.Draft {
 	}
 	return initial.Active()
 }
-
-const Help = `Usage: cmt <command> [flags]
-
-  commit (-c, --commit)        Create a Git commit using the current index
-  prototype                   Prepare a message without changing Git or files
-  config (-g, --config)        Edit global preferences; without TTY, show preferences
-  list (-l, --list)            List the offline catalog
-  search (-s, --search)        Search multiple queries independently
-  update (-u, --update)        Update the catalog; retain the cache on failure
-  init (-i, --init)            Install/update the recognized managed hook
-  remove (-r, --remove)        Remove only a recognized managed hook
-  hook, --hook FILE            Review and save file [source [object]] with TTY
-
-  --format emoji|standard|hybrid   Default: standard; overrides preferences
-  --type feat|fix|docs|refactor|test|chore|perf|style|build|ci|revert
-  --breaking                     Mark a breaking change: type! (or ! in the type selector)
-  --emoji :code:                  Exact catalog code
-  --title DESCRIPTION            Description, without title prefixes
-  --scope SCOPE                  Optional, lowercase
-  --message BODY                 Literal paragraphs/trailers
-  --accessible                   Compatibility alias; prompts are inline by default
-  config --show                  Show global/effective preferences and their source
-  config --set KEY=JSON           Save a global preference; repeat for multiple values
-  config --import FILE            Import a legacy profile when no native profile exists
-  -h, --help                     Help without side effects
-  -v, --version                  Native version without side effects
-
-No TTY: commit requires --title and a complete selection; prototype returns the message.
-Flags can be interleaved; -- ends flags and allows literal queries.
-Values starting with a dash: --title=-value. Repeated flags: last value wins.
-Commit uses only staged changes; an active managed hook blocks this client.
-Hooks preserve messages on cancel, without TTY, during rebase, and for commit/merge sources.
-`

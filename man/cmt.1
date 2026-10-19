@@ -1,0 +1,205 @@
+.TH CMT 1 "" cmt "User Commands"
+.nr HY 0
+.ds AD l
+.nh
+.ad l
+.SH NAME
+cmt \- prepare Conventional Commits and gitmoji messages
+.SH SYNOPSIS
+.B cmt
+.I command
+.RI [ flags ]
+.SH DESCRIPTION
+cmt builds commit messages in standard (type(scope): description), emoji, or hybrid mode, and commits the staged changes or reviews them from a Git hook. Normal use is offline.
+.SH COMMANDS
+.SS cmt commit [flags]
+Create a Git commit from the staged changes.
+.PP
+Alias: \-c
+.PP
+Only changes already staged with git add are committed; cmt never stages files.
+.PP
+In a terminal, prompts ask for what the flags leave out, and you confirm before Git runs.
+.PP
+Without a terminal, \-\-title and a complete selection authorize the commit.
+.PP
+If Git fails after you confirm (a hook, the signature...), the message is kept: the next commit asks "Reuse it? [Y/n]".
+.PP
+An active managed hook blocks this command; use git commit instead.
+.SS cmt prototype [flags]
+Print a message without changing Git or files.
+.TP
+.B \-\-hook FILE
+Review FILE as the hook would, and print the result instead of saving it
+.PP
+Without a terminal, prints the message built from the flags.
+.SS cmt config [\-\-show | \-\-set KEY=JSON... | \-\-import FILE]
+Edit global preferences.
+.PP
+Alias: \-g
+.TP
+.B \-\-show
+Show global and effective preferences and their source
+.TP
+.B \-\-set KEY=JSON
+Save a global preference; repeat to save several
+.TP
+.B \-\-import FILE
+Import a gitmoji\-cli profile when no native profile exists
+.PP
+Without flags, opens the preference editor in a terminal, or shows the preferences without one.
+.PP
+The nearest project file overrides global preferences: the "cmt" key of package.json, then .cmtrc.json, in each directory up to the root.
+.PP
+Example: cmt config \-\-set \(aqcommitFormat="hybrid"\(aq \-\-set \(aqcustomScopes=["api"]\(aq
+.SS cmt list
+List the offline emoji catalog.
+.PP
+Alias: \-l
+.SS cmt search QUERY...
+Search the catalog for each query independently.
+.PP
+Alias: \-s
+.PP
+Put \-\- before queries that start with a dash.
+.SS cmt update
+Download the catalog from catalogUrl; keep the cache on failure.
+.PP
+Alias: \-u
+.PP
+The only command that uses the network.
+.SS cmt init
+Install or update the managed hook in this repository.
+.PP
+Alias: \-i
+.PP
+The hook records the absolute path of this executable; run init again after moving it.
+.PP
+Not available on Windows yet.
+.SS cmt remove
+Remove the managed hook; other hooks are never touched.
+.PP
+Alias: \-r
+.SS cmt hook FILE [SOURCE [OBJECT]]
+Review a commit message file; run by the managed hook.
+.PP
+Alias: \-\-hook FILE
+.PP
+Git passes FILE and SOURCE; you normally run git commit, not this command.
+.PP
+The file is kept unchanged on cancel, without a terminal, during a rebase, and for amend, merge or \-c/\-C sources.
+.SH OPTIONS
+Message flags for commit, prototype and hook:
+.TP
+.B \-\-format emoji|standard|hybrid
+Message mode; overrides the commitFormat preference
+.TP
+.B \-\-type TYPE
+feat, fix, docs, refactor, test, chore, perf, style, build, ci or revert
+.TP
+.B \-\-breaking
+Mark a breaking change: type! (or press ! in the type selector)
+.TP
+.B \-\-emoji :code:
+Exact catalog code (emoji and hybrid modes)
+.TP
+.B \-\-title DESCRIPTION
+Description, without the type, scope or emoji prefix
+.TP
+.B \-\-scope SCOPE
+Optional scope, lowercase
+.TP
+.B \-\-message BODY
+Body: literal paragraphs and trailers
+.TP
+.B \-\-accessible
+Compatibility alias; prompts are inline by default
+.PP
+General flags:
+.TP
+.B \-h, \-\-help
+Show help; after a command, that command\(aqs help
+.TP
+.B \-v, \-\-version
+Show the version, target and build revision
+.PP
+Flags may come before or after the command; \-\- ends flags.
+.PP
+Values starting with a dash: \-\-title=\-value. Repeated flags: the last value wins.
+.SH KEYS
+.TP
+.B Up/Down, Enter
+Move and choose in a selector
+.TP
+.B typing
+Filter the selector (emojis also match codes and descriptions)
+.TP
+.B !
+In the type selector: mark a breaking change
+.TP
+.B Esc
+Clear the filter, or cancel
+.TP
+.B Ctrl+O
+In the body prompt: write the body in an editor
+.TP
+.B Ctrl+C
+Cancel
+.SH PREFERENCES
+Save them with config \-\-set KEY=JSON, or set them in a project file.
+.TP
+.B commitFormat
+"standard" (default), "emoji" or "hybrid"
+.TP
+.B scopePrompt
+true (default) suggests scopes; false hides the question; ["api","cli"] allows only that list
+.TP
+.B customScopes
+Extra scope suggestions, such as ["auth","deps"]
+.TP
+.B messagePrompt
+true (default) asks for a body
+.TP
+.B emojiFormat
+"emoji" (default) writes Unicode; "code" writes :code:
+.TP
+.B capitalizeTitle
+true (default) capitalizes emoji\-mode titles
+.TP
+.B editor
+Program for Ctrl+O; default: the first of nano, micro, nvim, vim, hx and vi
+.TP
+.B catalogUrl
+Catalog source for update; default: https://gitmoji.dev/api/gitmojis
+.SH FILES
+.TP
+.B ~/.config/cmt/config.json
+Global preferences on Linux ($XDG_CONFIG_HOME when set); ~/Library/Application Support/cmt on macOS, %AppData%\ecmt on Windows
+.TP
+.B \&.cmtrc.json, package.json
+Project preferences, nearest directory first
+.TP
+.B ~/.cmt/emojis.json
+Catalog cache written by update
+.TP
+.B $GIT_DIR/cmt\-draft.json
+Message kept after a failed commit, until one succeeds
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Failure
+.TP
+.B 2
+Invalid arguments, preferences or message
+.TP
+.B 130
+Cancelled
+.TP
+.B other
+Exit status of a failed Git command
+.SH SEE ALSO
+.BR git (1),
+.BR githooks (5)

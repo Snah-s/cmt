@@ -34,7 +34,7 @@ if [ "$target_os" = windows ]; then binary=cmt.exe; fi
 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
   -ldflags="-s -w -X main.version=$release_version -X main.revision=$release_revision -X main.buildDate=$release_date" \
   -o "$stage/$binary" ./cmd/cmt
-cp LICENSE README.md "$stage/"
+cp LICENSE README.md man/cmt.1 "$stage/"
 cp go.mod "$stage/"
 cp internal/catalog/assets/LICENSE "$stage/licenses/emoji-catalog-LICENSE"
 cp licenses/Go-LICENSE "$stage/licenses/Go-LICENSE"

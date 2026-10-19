@@ -19,7 +19,9 @@ Create a commit from the index: `go run ./cmd/cmt commit --type feat --title "ad
 List or search the offline catalog with `list` and `search bug linter`.
 Inspect preferences with `config --show`, or save a mode with
 `config --set 'commitFormat="hybrid"'`. `update` refreshes the catalog only when
-requested; normal use is offline. Run `cmt --help` for commands and flags.
+requested; normal use is offline. Run `cmt --help` for commands, and
+`cmt <command> --help` for its flags, prompt keys and preferences. Packages
+include the `cmt.1` man page; from a checkout, read it with `man ./man/cmt.1`.
 
 `standard` is the default. Use `--format emoji` or `--format hybrid` to select
 another mode, `--title` for the description, `--scope` for an optional scope,
@@ -97,6 +99,8 @@ cp cmt_0.1.0-rc.1_linux_amd64/cmt "$HOME/.local/bin/cmt"
 chmod 755 "$HOME/.local/bin/cmt"
 "$HOME/.local/bin/cmt" --version
 command -v cmt
+mkdir -p "$HOME/.local/share/man/man1"
+cp cmt_0.1.0-rc.1_linux_amd64/cmt.1 "$HOME/.local/share/man/man1/cmt.1"
 ```
 
 Add `$HOME/.local/bin` to PATH if needed. The checksum checks integrity against
